@@ -9,8 +9,8 @@ Follow these steps to set up and run the different components of the SOMNiA ecos
 ### 1. Backend & Web Services
 Open separate terminal instances for each service and run the following commands:
 
-<details>
-<summary><b>🖥️ Server (Backend)</b></summary>
+
+<summary<b>🖥️ Server (Backend)</b></summary>
 
 BACKEND
 ```bash
