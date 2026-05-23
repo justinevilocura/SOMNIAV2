@@ -2,6 +2,63 @@
   <img src="shared/images/SOMNiA.png" alt="SOMNiA LOGO" />
   <img src="https://cit.edu/wp-content/uploads/2023/07/cit-logo.png" alt="CIT LOGO" />
 </p>
+## 🚀 How to Run the Project
+
+Follow these steps to set up and run the different components of the SOMNiA ecosystem.
+
+### 1. Backend & Web Services
+Open separate terminal instances for each service and run the following commands:
+
+<details>
+<summary><b>🖥️ Server (Backend)</b></summary>
+
+BACKEND
+```bash
+cd server
+npm install
+npm run server
+
+WEB
+''bash
+cd client
+npm install
+npm run dev
+
+AI
+''bash
+cd ai_service
+python -m venv venv
+# On Windows PowerShell/CMD:
+venv\Scripts\activate
+# On Mac/Linux:
+source venv/bin/activate
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+2. Mobile App (Android)
+⚠️ Prerequisite: Ensure your backend services (server and ai_service) are already up and running before starting the mobile app.
+
+1. Open the Android Project:
+Open Android Studio. Locate and open the folder named android inside your somnia project directory.
+
+2. Launch the Emulator:
+Inside Android Studio, do not click the main "Play/Run" button at the top.
+Instead, open the Device Manager.
+Find your virtual device and click the Run/Launch button next to it to start the emulator. Wait for the virtual phone to fully boot up.
+
+3. Install Mobile Dependencies:
+Open your terminal (VS Code or your preferred terminal application) and navigate into the mobile directory:
+''bash
+cd mobile
+npm install
+
+4. Build and Run the App:
+With the emulator running in the background, run the specific command to compile the app using the Android Studio Java Runtime:
+''bash
+JAVA_HOME="C:/Program Files/Android/Android Studio/jbr" npm run android
+
+
 
 ## 📘 Project Description
 
