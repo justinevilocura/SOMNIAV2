@@ -9,7 +9,7 @@ import ExerciseSession from "../models/exerciseModel.js";
 import BloodPressure from "../models/bloodPressureModels.js";
 import SpO2 from "../models/spo2Model.js"; // ⬅️ NEW
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8001";
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const SEQ_LEN = 21; // must match your FastAPI SEQ_LEN
 
 //-----------------------------------------------------

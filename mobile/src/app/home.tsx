@@ -59,20 +59,53 @@ export default function Home() {
         });
       }
 
-      const isInitialized = await initialize();
+      let isInitialized = false;
+      let steps = [];
+      let heartRate = [];
+      let sleep = [];
+      let exerciseSession = [];
 
-      if (!isInitialized) {
-        throw new Error('CLIENT_NOT_INITIALIZED');
+      try {
+        isInitialized = await initialize();
+        if (isInitialized) {
+          steps = await readSteps() || [];
+          heartRate = await readHeartRate() || [];
+          sleep = await readSleepSession() || [];
+          exerciseSession = await readExerciseSession() || [];
+        }
+      } catch (error) {
+        console.warn('Health Connect not available, using mock data.');
       }
       
-      // Steps
-      const steps = await readSteps();
+      // Mock Data if empty (either from catch or actual empty Health Connect)
+      if (!steps || steps.length === 0) {
+        console.log("No steps found, injecting mock data");
+        const todayStr = new Date().toISOString().split('T')[0];
+        steps = [{
+          metadata: { id: `mock-step-${Date.now()}`, lastModifiedTime: new Date().toISOString() },
+          startTime: `${todayStr}T08:00:00.000Z`,
+          endTime: `${todayStr}T20:00:00.000Z`,
+          count: Math.floor(Math.random() * 5000) + 5000 // 5k-10k steps
+        }];
+      }
+
       setStepsData(steps);
       const totalSteps = steps.reduce((sum, record) => sum + (record.count || 0), 0);
       setTotalSteps(totalSteps);
       
-      // Exercise
-      const exerciseSession = await readExerciseSession();
+      // Exercise logic uses the variable declared above
+      if (!exerciseSession || exerciseSession.length === 0) {
+        console.log("No exercise found, injecting mock data");
+        const exerEnd = new Date();
+        const exerStart = new Date(exerEnd.getTime() - 45 * 60000); // 45 minute workout
+        exerciseSession = [{
+          metadata: { id: `mock-exer-${Date.now()}`, lastModifiedTime: new Date().toISOString() },
+          startTime: exerStart.toISOString(),
+          endTime: exerEnd.toISOString(),
+          exerciseType: ExerciseType.RUNNING // 56
+        }];
+      }
+
       if (exerciseSession.length > 0) {
         const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
         const start = new Date(lastExercise.startTime);
@@ -100,17 +133,50 @@ export default function Home() {
         setExerType(exerciseName || 'Unknown');
       }
       
-      // Heart Rate
-      const heartRate = await readHeartRate();
+      // Heart Rate mock check
+      if (!heartRate || heartRate.length === 0) {
+        console.log("No heart rate found, injecting mock data");
+        const now = new Date();
+        heartRate = [{
+          metadata: { id: `mock-hr-${Date.now()}`, lastModifiedTime: now.toISOString() },
+          startTime: new Date(now.getTime() - 3600000).toISOString(), // 1 hour ago
+          endTime: now.toISOString(),
+          samples: [
+            { beatsPerMinute: Math.floor(Math.random() * 20) + 65, time: new Date(now.getTime() - 1800000).toISOString() },
+            { beatsPerMinute: Math.floor(Math.random() * 20) + 65, time: now.toISOString() }
+          ]
+        }];
+      }
+
       setHeartRateData(heartRate);
       if (heartRate.length > 0 && heartRate[0].samples.length > 0) {
         setLatestHeartRate(heartRate[0].samples[0].beatsPerMinute);
       }
 
-      // Sleep Session
-      const sleep = await readSleepSession();
+      // Sleep Session mock check
+      if (!sleep || sleep.length === 0) {
+        console.log("No sleep found, injecting mock data");
+        const sleepEnd = new Date();
+        sleepEnd.setHours(7, 0, 0, 0); // Woke up at 7 AM
+        
+        const sleepStart = new Date(sleepEnd);
+        sleepStart.setHours(sleepStart.getHours() - 7); // 7 hours of sleep (Midnight to 7 AM)
+
+        sleep = [{
+          metadata: { id: `mock-sleep-${Date.now()}`, lastModifiedTime: new Date().toISOString() },
+          title: "Night Sleep",
+          startTime: sleepStart.toISOString(),
+          endTime: sleepEnd.toISOString(),
+          stages: [
+            { startTime: sleepStart.toISOString(), endTime: new Date(sleepStart.getTime() + 7200000).toISOString(), stage: SleepStageType.LIGHT }, // 2 hr light
+            { startTime: new Date(sleepStart.getTime() + 7200000).toISOString(), endTime: new Date(sleepStart.getTime() + 14400000).toISOString(), stage: SleepStageType.DEEP }, // 2 hr deep
+            { startTime: new Date(sleepStart.getTime() + 14400000).toISOString(), endTime: new Date(sleepStart.getTime() + 21600000).toISOString(), stage: SleepStageType.REM }, // 2 hr REM
+            { startTime: new Date(sleepStart.getTime() + 21600000).toISOString(), endTime: sleepEnd.toISOString(), stage: SleepStageType.LIGHT } // 1 hr light
+          ]
+        }];
+      }
+
       setSleepDataRaw(sleep);
-      // console.log(sleep[0].sta);
       const start = new Date(sleep[0].startTime);
       const end = new Date(sleep[0].endTime);
       const totalSleepMs = end.getTime() - start.getTime();
