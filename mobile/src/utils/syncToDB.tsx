@@ -1,7 +1,7 @@
 import { RecordResult } from "react-native-health-connect";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const backendUrl = 'http://192.168.1.61:4000';
+const backendUrl = 'http://172.20.10.2:4000';
 
 const handleResponse = async (response: Response, dataType: string) => {
     if (!response.ok) {

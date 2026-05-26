@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView, Modal, Platform, TextInput } 
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Toast from 'react-native-toast-message';
 import styles from '../assets/styles/diary.styles';
 
 export default function Diary() {
@@ -93,6 +94,13 @@ export default function Diary() {
     
     // Close the modal
     setShowDiaryModal(false);
+    
+    // Show notification
+    Toast.show({
+      type: 'success',
+      text1: 'Diary Added!',
+      text2: 'Your sleep diary entry was saved successfully.'
+    });
   };
 
   return (

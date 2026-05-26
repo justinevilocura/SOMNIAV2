@@ -1,7 +1,8 @@
 import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
-import React, { useEffect, useState, useContext} from 'react';
+import React, { useEffect, useState, useContext } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import styles from '../assets/styles/home.styles';
 import LinearGradient from 'react-native-linear-gradient';
 import BottomNav from '../components/BottomNav';
@@ -46,7 +47,7 @@ export default function Home() {
       },
     ],
   });
-  
+
   useEffect(() => {
     const fetchHealthData = async () => {
       const authDataString = await AsyncStorage.getItem('authData');
@@ -76,7 +77,7 @@ export default function Home() {
       } catch (error) {
         console.warn('Health Connect not available, using mock data.');
       }
-      
+
       // Mock Data if empty (either from catch or actual empty Health Connect)
       if (!steps || steps.length === 0) {
         console.log("No steps found, injecting mock data");
@@ -92,7 +93,7 @@ export default function Home() {
       setStepsData(steps);
       const totalSteps = steps.reduce((sum, record) => sum + (record.count || 0), 0);
       setTotalSteps(totalSteps);
-      
+
       // Exercise logic uses the variable declared above
       if (!exerciseSession || exerciseSession.length === 0) {
         console.log("No exercise found, injecting mock data");
@@ -121,7 +122,7 @@ export default function Home() {
         } else {
           formattedExercise = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
         }
-        
+
         setExerSession(formattedExercise);
 
         const getExerciseName = (value: number): string | undefined => {
@@ -132,7 +133,7 @@ export default function Home() {
         const exerciseName = getExerciseName(exerciseSession[0].exerciseType);
         setExerType(exerciseName || 'Unknown');
       }
-      
+
       // Heart Rate mock check
       if (!heartRate || heartRate.length === 0) {
         console.log("No heart rate found, injecting mock data");
@@ -158,7 +159,7 @@ export default function Home() {
         console.log("No sleep found, injecting mock data");
         const sleepEnd = new Date();
         sleepEnd.setHours(7, 0, 0, 0); // Woke up at 7 AM
-        
+
         const sleepStart = new Date(sleepEnd);
         sleepStart.setHours(sleepStart.getHours() - 7); // 7 hours of sleep (Midnight to 7 AM)
 
@@ -227,7 +228,8 @@ export default function Home() {
     fetchHealthData();
   }, []);
 
-  const [selectedTab, setSelectedTab] = useState('home');
+  const params = useLocalSearchParams();
+  const [selectedTab, setSelectedTab] = useState(params.tab ? params.tab.toString() : 'home');
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -261,30 +263,30 @@ export default function Home() {
             <Text style={styles.profileName}>{userData.name}</Text>
           </View>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.profileButton}
           onPress={() => setSelectedTab('profile')}>
           <Ionicons name="person-circle-outline" size={32} color="#fff" />
         </TouchableOpacity>
       </View>
-    
+
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         <View style={{ paddingHorizontal: 16 }}>
-        <Text style={{
-          color: 'skyblue',
-          fontSize: 18,
-          fontWeight: 'bold',
-          textAlign: 'center',
-          marginBottom: 8,
-        }}>
-          Sleep Stages Throughout the Night
-        </Text>
-      </View>
+          <Text style={{
+            color: 'skyblue',
+            fontSize: 18,
+            fontWeight: 'bold',
+            textAlign: 'center',
+            marginBottom: 8,
+          }}>
+            Sleep Stages Throughout the Night
+          </Text>
+        </View>
         {selectedTab === 'home' && (
           <>
             {sleepData.labels.length > 0 && (
               <ScrollView horizontal>
-                
+
                 <LineChart
                   data={sleepData}
                   width={Math.max(screenWidth, sleepData.labels.length * 60)}
@@ -331,7 +333,7 @@ export default function Home() {
 
             <View style={styles.statsBoxContainer}>
               {statBoxes.map((box, idx) => (
-                <View key={idx} style={[styles.statBox, { backgroundColor: box.color + '22' }]}> 
+                <View key={idx} style={[styles.statBox, { backgroundColor: box.color + '22' }]}>
                   <Ionicons name={box.icon} size={28} color={box.color} style={{ marginBottom: 6 }} />
                   <Text style={[styles.statBoxValue, { color: box.color }]}>{box.value} <Text style={styles.statBoxUnit}>{box.unit}</Text></Text>
                   <Text style={styles.statBoxLabel}>{box.label}</Text>
@@ -339,7 +341,7 @@ export default function Home() {
               ))}
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.syncButton}
               onPress={async () => {
                 if (!userData.user_id) {
@@ -366,25 +368,25 @@ export default function Home() {
 
       <View style={styles.bottomNavContainer}>
         <View style={styles.bottomNav}>
-          <BottomNav 
-            onPress={() => setSelectedTab('home')} 
-            icon={selectedTab === 'home' ? 'home' : 'home-outline'} 
-            iconColor={selectedTab === 'home' ? '#a259ff' : '#fff'} 
+          <BottomNav
+            onPress={() => setSelectedTab('home')}
+            icon={selectedTab === 'home' ? 'home' : 'home-outline'}
+            iconColor={selectedTab === 'home' ? '#a259ff' : '#fff'}
             navName={<Text style={[styles.navText, selectedTab === 'home' && styles.navTextActive]}>Home</Text>} />
-          <BottomNav 
-            onPress={() => setSelectedTab('recommendations')} 
-            icon={selectedTab === 'recommendations' ? 'bulb' : 'bulb-outline'} 
-            iconColor={selectedTab === 'recommendations' ? '#a259ff' : '#fff'} 
+          <BottomNav
+            onPress={() => setSelectedTab('recommendations')}
+            icon={selectedTab === 'recommendations' ? 'bulb' : 'bulb-outline'}
+            iconColor={selectedTab === 'recommendations' ? '#a259ff' : '#fff'}
             navName={<Text style={[styles.navText, selectedTab === 'recommendations' && styles.navTextActive]}>Tips</Text>} />
-          <BottomNav 
-            onPress={() => setSelectedTab('diary')} 
-            icon={selectedTab === 'diary' ? 'journal' : 'journal-outline'} 
-            iconColor={selectedTab === 'diary' ? '#a259ff' : '#fff'} 
+          <BottomNav
+            onPress={() => setSelectedTab('diary')}
+            icon={selectedTab === 'diary' ? 'journal' : 'journal-outline'}
+            iconColor={selectedTab === 'diary' ? '#a259ff' : '#fff'}
             navName={<Text style={[styles.navText, selectedTab === 'diary' && styles.navTextActive]}>Diary</Text>} />
-          <BottomNav 
-            onPress={() => setSelectedTab('profile')} 
-            icon={selectedTab === 'profile' ? 'person' : 'person-outline'} 
-            iconColor={selectedTab === 'profile' ? '#a259ff' : '#fff'} 
+          <BottomNav
+            onPress={() => setSelectedTab('profile')}
+            icon={selectedTab === 'profile' ? 'person' : 'person-outline'}
+            iconColor={selectedTab === 'profile' ? '#a259ff' : '#fff'}
             navName={<Text style={[styles.navText, selectedTab === 'profile' && styles.navTextActive]}>Profile</Text>} />
         </View>
       </View>

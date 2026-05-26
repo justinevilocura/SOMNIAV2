@@ -24,3 +24,35 @@ export const getUserData = async (req,res)=>{
         res.json({success: false, message: error.message});
     }
 }
+
+export const updateUserGoals = async (req, res) => {
+    try {
+        const { userId, sleepGoalBedtime, sleepGoalDuration } = req.body;
+        
+        if (!userId) {
+            return res.json({ success: false, message: 'User ID is required' });
+        }
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            { sleepGoalBedtime, sleepGoalDuration },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Sleep goals updated successfully',
+            goals: {
+                sleepGoalBedtime: updatedUser.sleepGoalBedtime,
+                sleepGoalDuration: updatedUser.sleepGoalDuration
+            }
+        });
+
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+}

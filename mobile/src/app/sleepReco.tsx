@@ -24,6 +24,7 @@ export default function SleepReco() {
 
   // Function to get sleep recommendations
   const getSleepRecommendations = () => {
+    const backendUrl = 'http://10.225.87.201:4000';
     const lastSleepHours = sleepData.datasets[0].data[sleepData.datasets[0].data.length - 1];
     const recommendations = [];
 

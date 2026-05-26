@@ -50,6 +50,60 @@ const styles = StyleSheet.create({
     marginLeft: 15,
     fontSize: 16,
   },
+  sectionTitle: {
+    color: 'skyblue',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 24,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  wearableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a2e',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  wearableIconContainer: {
+    backgroundColor: '#fff',
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 16,
+  },
+  wearableTextContainer: {
+    flex: 1,
+  },
+  wearableTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  wearableStatusLive: {
+    color: '#43e97b',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  wearableStatusDisconnected: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  connectButton: {
+    backgroundColor: '#a259ff',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  connectButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
 });
 
 export default styles;
