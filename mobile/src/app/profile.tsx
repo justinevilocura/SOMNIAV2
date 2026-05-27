@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { initialize } from 'react-native-health-connect';
+import { initialize, requestPermission } from 'react-native-health-connect';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../assets/styles/profile.styles';
 
@@ -17,7 +17,15 @@ export default function Profile() {
 
   useEffect(() => {
     loadUserData();
+    checkHealthConnect();
   }, []);
+
+  const checkHealthConnect = async () => {
+    const status = await AsyncStorage.getItem('healthConnectLive');
+    if (status === 'true') {
+      setIsHealthConnectLive(true);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -49,7 +57,14 @@ export default function Profile() {
     try {
       const isInitialized = await initialize();
       if (isInitialized) {
+        await requestPermission([
+          { accessType: 'read', recordType: 'Steps' },
+          { accessType: 'read', recordType: 'HeartRate' },
+          { accessType: 'read', recordType: 'SleepSession' },
+          { accessType: 'read', recordType: 'ExerciseSession' },
+        ]);
         setIsHealthConnectLive(true);
+        await AsyncStorage.setItem('healthConnectLive', 'true');
       }
     } catch (error) {
       console.log('Health Connect failed to initialize', error);
@@ -80,11 +95,11 @@ export default function Profile() {
             <Text style={styles.wearableStatusDisconnected}>Disconnected</Text>
           )}
         </View>
-        {!isHealthConnectLive && (
-          <TouchableOpacity style={styles.connectButton} onPress={handleConnectFit}>
-            <Text style={styles.connectButtonText}>+ Connect</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.connectButton} onPress={handleConnectFit}>
+          <Text style={styles.connectButtonText}>
+            {isHealthConnectLive ? 'Permissions' : '+ Connect'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.settingsList}>

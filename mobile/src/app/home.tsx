@@ -73,39 +73,18 @@ export default function Home() {
           heartRate = await readHeartRate() || [];
           sleep = await readSleepSession() || [];
           exerciseSession = await readExerciseSession() || [];
+          
+          console.log(`=== HEALTH CONNECT REAL DATA ===`);
+          console.log(`Real Steps Count: ${steps.length}`);
+          console.log(`Real Heart Rate Count: ${heartRate.length}`);
+          console.log(`Real Sleep Count: ${sleep.length}`);
+          console.log(`Real Exercise Count: ${exerciseSession.length}`);
         }
       } catch (error) {
         console.warn('Health Connect not available, using mock data.');
       }
 
-      // Mock Data if empty (either from catch or actual empty Health Connect)
-      if (!steps || steps.length === 0) {
-        console.log("No steps found, injecting mock data");
-        const todayStr = new Date().toISOString().split('T')[0];
-        steps = [{
-          metadata: { id: `mock-step-${Date.now()}`, lastModifiedTime: new Date().toISOString() },
-          startTime: `${todayStr}T08:00:00.000Z`,
-          endTime: `${todayStr}T20:00:00.000Z`,
-          count: Math.floor(Math.random() * 5000) + 5000 // 5k-10k steps
-        }];
-      }
-
-      setStepsData(steps);
-      const totalSteps = steps.reduce((sum, record) => sum + (record.count || 0), 0);
-      setTotalSteps(totalSteps);
-
-      // Exercise logic uses the variable declared above
-      if (!exerciseSession || exerciseSession.length === 0) {
-        console.log("No exercise found, injecting mock data");
-        const exerEnd = new Date();
-        const exerStart = new Date(exerEnd.getTime() - 45 * 60000); // 45 minute workout
-        exerciseSession = [{
-          metadata: { id: `mock-exer-${Date.now()}`, lastModifiedTime: new Date().toISOString() },
-          startTime: exerStart.toISOString(),
-          endTime: exerEnd.toISOString(),
-          exerciseType: ExerciseType.RUNNING // 56
-        }];
-      }
+      // REMOVED MOCK DATA - Use real data or empty arrays
 
       if (exerciseSession.length > 0) {
         const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
@@ -132,21 +111,9 @@ export default function Home() {
         };
         const exerciseName = getExerciseName(exerciseSession[0].exerciseType);
         setExerType(exerciseName || 'Unknown');
-      }
-
-      // Heart Rate mock check
-      if (!heartRate || heartRate.length === 0) {
-        console.log("No heart rate found, injecting mock data");
-        const now = new Date();
-        heartRate = [{
-          metadata: { id: `mock-hr-${Date.now()}`, lastModifiedTime: now.toISOString() },
-          startTime: new Date(now.getTime() - 3600000).toISOString(), // 1 hour ago
-          endTime: now.toISOString(),
-          samples: [
-            { beatsPerMinute: Math.floor(Math.random() * 20) + 65, time: new Date(now.getTime() - 1800000).toISOString() },
-            { beatsPerMinute: Math.floor(Math.random() * 20) + 65, time: now.toISOString() }
-          ]
-        }];
+      } else {
+        setExerSession("No recent exercise");
+        setExerType("None");
       }
 
       setHeartRateData(heartRate);
@@ -154,38 +121,21 @@ export default function Home() {
         setLatestHeartRate(heartRate[0].samples[0].beatsPerMinute);
       }
 
-      // Sleep Session mock check
-      if (!sleep || sleep.length === 0) {
-        console.log("No sleep found, injecting mock data");
-        const sleepEnd = new Date();
-        sleepEnd.setHours(7, 0, 0, 0); // Woke up at 7 AM
+      // REMOVED SLEEP MOCK DATA
 
-        const sleepStart = new Date(sleepEnd);
-        sleepStart.setHours(sleepStart.getHours() - 7); // 7 hours of sleep (Midnight to 7 AM)
-
-        sleep = [{
-          metadata: { id: `mock-sleep-${Date.now()}`, lastModifiedTime: new Date().toISOString() },
-          title: "Night Sleep",
-          startTime: sleepStart.toISOString(),
-          endTime: sleepEnd.toISOString(),
-          stages: [
-            { startTime: sleepStart.toISOString(), endTime: new Date(sleepStart.getTime() + 7200000).toISOString(), stage: SleepStageType.LIGHT }, // 2 hr light
-            { startTime: new Date(sleepStart.getTime() + 7200000).toISOString(), endTime: new Date(sleepStart.getTime() + 14400000).toISOString(), stage: SleepStageType.DEEP }, // 2 hr deep
-            { startTime: new Date(sleepStart.getTime() + 14400000).toISOString(), endTime: new Date(sleepStart.getTime() + 21600000).toISOString(), stage: SleepStageType.REM }, // 2 hr REM
-            { startTime: new Date(sleepStart.getTime() + 21600000).toISOString(), endTime: sleepEnd.toISOString(), stage: SleepStageType.LIGHT } // 1 hr light
-          ]
-        }];
+      if (sleep.length > 0) {
+        setSleepDataRaw(sleep);
+        const start = new Date(sleep[0].startTime);
+        const end = new Date(sleep[0].endTime);
+        const totalSleepMs = end.getTime() - start.getTime();
+        const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+        setTotalSleepHours(formattedSleep);
+      } else {
+        setTotalSleepHours("0 hours and 0 minutes");
       }
-
-      setSleepDataRaw(sleep);
-      const start = new Date(sleep[0].startTime);
-      const end = new Date(sleep[0].endTime);
-      const totalSleepMs = end.getTime() - start.getTime();
-      const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-      setTotalSleepHours(formattedSleep);
 
       // Sleep Graph
       const labels: string[] = [];
