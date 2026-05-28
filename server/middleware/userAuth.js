@@ -8,7 +8,7 @@ const userAuth = async (req, res, next) => {
     if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
       token = req.headers.authorization.split(' ')[1];
     }
-
+    
     if (!token) {
       res.clearCookie('token', {
         httpOnly: true,
