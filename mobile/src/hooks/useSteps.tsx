@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { requestPermission, readRecords } from 'react-native-health-connect';
+import { readRecords } from 'react-native-health-connect';
 import { TimeRangeFilter } from 'react-native-health-connect/lib/typescript/types/base.types';
 
 export const useSteps = (date: Date) => {
@@ -15,26 +15,14 @@ export const useSteps = (date: Date) => {
     endTime: endDate.toISOString(),
   };
 
-  const requestSteps = useCallback(async () => {
-    const granted = await requestPermission([
-      { accessType: 'read', recordType: 'Steps' },
-    ]);
-
-    if (!granted.some((p) => p.recordType === 'Steps')) {
-      throw new Error('Permission not granted for Steps');
-    }
-  }, []);
-
   const readSteps = useCallback(async () => {
-    await requestSteps();
-
     const { records } = await readRecords('Steps', {
       timeRangeFilter,
     });
 
     //console.log('Steps records:', JSON.stringify(records, null, 2));
     return records;
-  }, [requestSteps, timeRangeFilter]);
+  }, [timeRangeFilter]);
 
   return {
     readSteps,

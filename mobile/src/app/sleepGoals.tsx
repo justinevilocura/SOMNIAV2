@@ -9,7 +9,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SleepGoals() {
   const router = useRouter();
-  
+
   const [bedtimeHour, setBedtimeHour] = useState(22); // 24h format, 22 = 10 PM
   const [bedtimeMinute, setBedtimeMinute] = useState(30);
   const [sleepDuration, setSleepDuration] = useState(8); // hours
@@ -47,13 +47,13 @@ export default function SleepGoals() {
       // Sync to backend
       const token = await AsyncStorage.getItem('token');
       const authDataString = await AsyncStorage.getItem('authData');
-      
+
       if (token && authDataString) {
         const authData = JSON.parse(authDataString);
         const userId = authData.user_id;
-        
+
         const formatBedtime = `${bedtimeHour.toString().padStart(2, '0')}:${bedtimeMinute.toString().padStart(2, '0')}`;
-        
+
         await fetch(`${backendUrl}/api/user/update-goals`, {
           method: 'POST',
           headers: {
@@ -139,13 +139,13 @@ export default function SleepGoals() {
       </View>
 
       <View style={styles.content}>
-        
+
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="moon" size={24} color="#5d3fd3" />
             <Text style={styles.cardTitle}>Target Bedtime</Text>
           </View>
-          
+
           <View style={[styles.controlRow, { justifyContent: 'center' }]}>
             <TouchableOpacity onPress={() => setShowPicker(true)} style={styles.timePickerBtn}>
               <Text style={styles.timeValue}>{formatTime(bedtimeHour, bedtimeMinute)}</Text>
@@ -169,7 +169,7 @@ export default function SleepGoals() {
             <Ionicons name="time" size={24} color="#43e97b" />
             <Text style={styles.cardTitle}>Sleep Duration Goal</Text>
           </View>
-          
+
           <View style={[styles.controlRow, { justifyContent: 'center' }]}>
             <TouchableOpacity onPress={() => setShowDurationPicker(true)} style={styles.timePickerBtn}>
               <Text style={styles.timeValue}>{formatDurationDisplay()}</Text>
@@ -189,7 +189,7 @@ export default function SleepGoals() {
         </View>
 
         <View style={styles.summaryCard}>
-          <Ionicons name="sunny" size={32} color="#ff8c42" style={{marginBottom: 10}} />
+          <Ionicons name="sunny" size={32} color="#ff8c42" style={{ marginBottom: 10 }} />
           <Text style={styles.summaryLabel}>Estimated Wake Time</Text>
           <Text style={styles.summaryValue}>{calcWakeTime()}</Text>
           <Text style={styles.summaryDesc}>Based on your target bedtime and duration goal, you should expect to wake up at this time.</Text>

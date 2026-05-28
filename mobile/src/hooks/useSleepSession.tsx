@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { requestPermission, readRecords } from 'react-native-health-connect';
+import { readRecords } from 'react-native-health-connect';
 import { TimeRangeFilter } from 'react-native-health-connect/lib/typescript/types/base.types';
 
 export const useSleepSession = (date: Date) => {
@@ -16,26 +16,14 @@ export const useSleepSession = (date: Date) => {
     endTime: endDate.toISOString(),
   };
 
-  const requestSleepPermission = useCallback(async () => {
-    const granted = await requestPermission([
-      { accessType: 'read', recordType: 'SleepSession' },
-    ]);
-
-    if (!granted.some((p) => p.recordType === 'SleepSession')) {
-      throw new Error('Permission not granted for SleepSession');
-    }
-  }, []);
-
   const readSleepSession = useCallback(async () => {
-    await requestSleepPermission();
-
     const { records } = await readRecords('SleepSession', {
       timeRangeFilter,
     });
 
     // console.log('SleepSession records:', JSON.stringify(records, null, 2));
     return records;
-  }, [requestSleepPermission, timeRangeFilter]);
+  }, [timeRangeFilter]);
 
   return {
     readSleepSession,

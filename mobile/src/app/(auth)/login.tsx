@@ -25,9 +25,9 @@ export default function Login() {
 
 
         // Create user data object
-        const userData = { 
-            email, 
-            password 
+        const userData = {
+            email,
+            password
         };
 
         try {
@@ -45,11 +45,11 @@ export default function Login() {
                 console.log('Login successful, response:', response.data);
                 // Extract token from response body
                 const token = response.data.token;
-                
+
                 if (token) {
                     // Store the raw token for API requests
                     await AsyncStorage.setItem('token', token);
-                    
+
                     // Store auth data
                     const authData = {
                         token,
@@ -66,7 +66,7 @@ export default function Login() {
                     type: 'success',
                     text1: 'Login successful!',
                 });
-                router.replace('/home'); 
+                router.replace('/home');
             } else {
                 console.log('Login failed, response:', response.data);
                 Toast.show({
@@ -91,11 +91,11 @@ export default function Login() {
             setIsLoading(false);
         }
     };
-  
+
     return (
         <LinearGradient
-          colors={['#101522', '#18213a', '#2d325a']}
-          style={{ flex: 1 }}
+            colors={['#101522', '#18213a', '#2d325a']}
+            style={{ flex: 1 }}
         >
             <View style={styles.headerContainer}>
                 <Image source={require('../../assets/images/somnia.png')} style={styles.logo} resizeMode="contain" />
@@ -158,14 +158,14 @@ export default function Login() {
                 </View>
                 {/* Social Buttons */}
                 <View style={styles.socialRow}>
-                  <TouchableOpacity style={[styles.socialBtnFull, { marginRight: 6 }]}> 
-                    <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
-                    <Text style={styles.socialBtnText}>Google</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.socialBtnFull, { marginLeft: 6 }]}> 
-                    <Image source={require('../../assets/images/facebook.png')} style={styles.socialIconFull} />
-                    <Text style={styles.socialBtnText}>Facebook</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity style={[styles.socialBtnFull, { marginRight: 6 }]}>
+                        <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
+                        <Text style={styles.socialBtnText}>Google</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.socialBtnFull, { marginLeft: 6 }]}>
+                        <Image source={require('../../assets/images/facebook.png')} style={styles.socialIconFull} />
+                        <Text style={styles.socialBtnText}>Facebook</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         </LinearGradient>

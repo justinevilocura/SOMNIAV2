@@ -13,7 +13,7 @@ import Profile from './profile';
 import Tips from './tips';
 import { ExerciseType, SleepStageType, RecordResult } from 'react-native-health-connect';
 import { useExerciseSession } from '../hooks/useExerciseSession';
-import { initialize } from 'react-native-health-connect';
+import { initialize, requestPermission } from 'react-native-health-connect';
 import { useHeartRate } from '../hooks/useHeartRate';
 import { useSleepSession } from '../hooks/useSleepSession';
 import { useSteps } from '../hooks/useSteps';
@@ -69,11 +69,18 @@ export default function Home() {
       try {
         isInitialized = await initialize();
         if (isInitialized) {
+          await requestPermission([
+            { accessType: 'read', recordType: 'Steps' },
+            { accessType: 'read', recordType: 'HeartRate' },
+            { accessType: 'read', recordType: 'SleepSession' },
+            { accessType: 'read', recordType: 'ExerciseSession' }
+          ]);
+          
           steps = await readSteps() || [];
           heartRate = await readHeartRate() || [];
           sleep = await readSleepSession() || [];
           exerciseSession = await readExerciseSession() || [];
-          
+
           console.log(`=== HEALTH CONNECT REAL DATA ===`);
           console.log(`Real Steps Count: ${steps.length}`);
           console.log(`Real Heart Rate Count: ${heartRate.length}`);
@@ -125,9 +132,15 @@ export default function Home() {
 
       if (sleep.length > 0) {
         setSleepDataRaw(sleep);
-        const start = new Date(sleep[0].startTime);
-        const end = new Date(sleep[0].endTime);
+        
+        // Grab the most recent sleep session to prevent overlapping bugs
+        const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+        const latestSleep = sortedSleep[0];
+        
+        const start = new Date(latestSleep.startTime);
+        const end = new Date(latestSleep.endTime);
         const totalSleepMs = end.getTime() - start.getTime();
+        
         const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;

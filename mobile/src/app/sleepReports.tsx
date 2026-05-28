@@ -28,7 +28,7 @@ export default function SleepReports() {
     try {
       const backendUrl = 'http://172.20.10.2:4000';
       const token = await AsyncStorage.getItem('token');
-      
+
       if (!token) return;
 
       const response = await fetch(`${backendUrl}/api/sleepSession/history`, {
@@ -37,9 +37,9 @@ export default function SleepReports() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       const json = await response.json();
-      
+
       if (json.success && json.data && json.data.sessions) {
         const daysArray = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const dynamicLabels = [];
@@ -65,7 +65,7 @@ export default function SleepReports() {
           // Cap at 24 hours just in case of multiple sync bugs
           dayHours = Math.min(dayHours, 24);
           weeklyData.push(dayHours);
-          
+
           // Only include realistic numbers (less than 14 hours) for the average
           if (dayHours > 0 && dayHours < 14) {
             totalHours += dayHours;
@@ -75,7 +75,7 @@ export default function SleepReports() {
 
         const avgVal = daysWithSleep > 0 ? (totalHours / daysWithSleep) : 0;
         setAvgDuration(`${avgVal.toFixed(1)}h`);
-        
+
         // Calculate Consistency similar to Web Dashboard Efficiency (Target: 8 hours)
         let efficiency = avgVal > 0 ? (avgVal / 8) * 100 : 0;
         efficiency = Math.min(100, Math.round(efficiency));
@@ -127,7 +127,7 @@ export default function SleepReports() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        
+
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="bar-chart" size={24} color="#a259ff" />
@@ -156,7 +156,7 @@ export default function SleepReports() {
             <Text style={styles.statValue}>{avgDuration}</Text>
             <Text style={styles.statLabel}>Avg Duration</Text>
           </View>
-          
+
           <View style={[styles.statBox, { borderColor: 'rgba(255, 140, 66, 0.3)' }]}>
             <Ionicons name="flame" size={28} color="#ff8c42" style={styles.statIcon} />
             <Text style={styles.statValue}>{consistency}</Text>
@@ -176,7 +176,7 @@ export default function SleepReports() {
           )}
         </View>
 
-        <View style={{height: 40}} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </LinearGradient>
   );
