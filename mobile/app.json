@@ -28,21 +28,21 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.belleza.mobile",
-      "permissions": [
-        "android.permission.health.READ_BLOOD_PRESSURE",
-        "android.permission.health.READ_EXERCISE",
-        "android.permission.health.READ_HEART_RATE",
-        "android.permission.health.READ_RESTING_HEART_RATE",
-        "android.permission.health.READ_SLEEP",
-        "android.permission.health.READ_STEPS"
-      ]
+      "permissions": []
     },
     "web": {
       "favicon": "src/assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
-      "react-native-health-connect",
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "Allow SOMNiA to read your health data to track sleep, steps, and heart rate.",
+          "healthUpdatePermission": "Allow SOMNiA to write health data.",
+          "isClinicalDataEnabled": false
+        }
+      ],
       [
         "expo-build-properties",
         {

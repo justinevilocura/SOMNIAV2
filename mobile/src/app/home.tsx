@@ -11,9 +11,9 @@ import SleepReco from './sleepReco';
 import Diary from './diary';
 import Profile from './profile';
 import Tips from './tips';
-import { ExerciseType, SleepStageType, RecordResult } from 'react-native-health-connect';
+import AppleHealthKit from 'react-native-health';
+import { ExerciseType, SleepStageType } from '../utils/healthCompatibility';
 import { useExerciseSession } from '../hooks/useExerciseSession';
-import { initialize, requestPermission } from 'react-native-health-connect';
 import { useHeartRate } from '../hooks/useHeartRate';
 import { useSleepSession } from '../hooks/useSleepSession';
 import { useSteps } from '../hooks/useSteps';
@@ -66,29 +66,47 @@ export default function Home() {
       let sleep = [];
       let exerciseSession = [];
 
+      const permissions = {
+        permissions: {
+          read: [
+            AppleHealthKit.Constants.Permissions.StepCount,
+            AppleHealthKit.Constants.Permissions.HeartRate,
+            AppleHealthKit.Constants.Permissions.SleepAnalysis,
+            AppleHealthKit.Constants.Permissions.Workout,
+          ],
+          write: [],
+        },
+      };
+
+      const initHealth = (): Promise<boolean> => {
+        return new Promise((resolve) => {
+          AppleHealthKit.initHealthKit(permissions, (error) => {
+            if (error) {
+              console.warn('[ERROR] Cannot grant Apple HealthKit permissions:', error);
+              resolve(false);
+            } else {
+              resolve(true);
+            }
+          });
+        });
+      };
+
       try {
-        isInitialized = await initialize();
+        isInitialized = await initHealth();
         if (isInitialized) {
-          await requestPermission([
-            { accessType: 'read', recordType: 'Steps' },
-            { accessType: 'read', recordType: 'HeartRate' },
-            { accessType: 'read', recordType: 'SleepSession' },
-            { accessType: 'read', recordType: 'ExerciseSession' }
-          ]);
-          
           steps = await readSteps() || [];
           heartRate = await readHeartRate() || [];
           sleep = await readSleepSession() || [];
           exerciseSession = await readExerciseSession() || [];
 
-          console.log(`=== HEALTH CONNECT REAL DATA ===`);
+          console.log(`=== APPLE HEALTH REAL DATA ===`);
           console.log(`Real Steps Count: ${steps.length}`);
           console.log(`Real Heart Rate Count: ${heartRate.length}`);
           console.log(`Real Sleep Count: ${sleep.length}`);
           console.log(`Real Exercise Count: ${exerciseSession.length}`);
         }
       } catch (error) {
-        console.warn('Health Connect not available, using mock data.');
+        console.warn('Apple Health not available:', error);
       }
 
       // REMOVED MOCK DATA - Use real data or empty arrays
@@ -124,6 +142,9 @@ export default function Home() {
       }
 
       setHeartRateData(heartRate);
+      setStepsData(steps);
+      const totalStepsSum = steps.reduce((sum: number, s: any) => sum + (s.count || 0), 0);
+      setTotalSteps(totalStepsSum);
       if (heartRate.length > 0 && heartRate[0].samples.length > 0) {
         setLatestHeartRate(heartRate[0].samples[0].beatsPerMinute);
       }

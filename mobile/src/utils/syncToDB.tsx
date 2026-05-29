@@ -1,4 +1,3 @@
-import { RecordResult } from "react-native-health-connect";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const backendUrl = 'http://172.20.10.2:4000';
@@ -26,9 +25,9 @@ const getAuthToken = async () => {
 
 
 export const syncToDB = async (
-    heartRate: RecordResult<"HeartRate">[],
-    sleepSession: RecordResult<"SleepSession">[],
-    steps: RecordResult<"Steps">[],
+    heartRate: any[],
+    sleepSession: any[],
+    steps: any[],
     userID: string
 ) => {
     try {

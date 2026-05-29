@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { initialize, requestPermission } from 'react-native-health-connect';
+import AppleHealthKit from 'react-native-health';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../assets/styles/profile.styles';
 
@@ -13,17 +13,17 @@ export default function Profile() {
     email: ''
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [isHealthConnectLive, setIsHealthConnectLive] = useState(false);
+  const [isAppleHealthLive, setIsAppleHealthLive] = useState(false);
 
   useEffect(() => {
     loadUserData();
-    checkHealthConnect();
+    checkAppleHealth();
   }, []);
 
-  const checkHealthConnect = async () => {
-    const status = await AsyncStorage.getItem('healthConnectLive');
+  const checkAppleHealth = async () => {
+    const status = await AsyncStorage.getItem('appleHealthLive');
     if (status === 'true') {
-      setIsHealthConnectLive(true);
+      setIsAppleHealthLive(true);
     }
   };
 
@@ -53,22 +53,27 @@ export default function Profile() {
     }
   };
 
-  const handleConnectFit = async () => {
-    try {
-      const isInitialized = await initialize();
-      if (isInitialized) {
-        await requestPermission([
-          { accessType: 'read', recordType: 'Steps' },
-          { accessType: 'read', recordType: 'HeartRate' },
-          { accessType: 'read', recordType: 'SleepSession' },
-          { accessType: 'read', recordType: 'ExerciseSession' },
-        ]);
-        setIsHealthConnectLive(true);
-        await AsyncStorage.setItem('healthConnectLive', 'true');
+  const handleConnectHealth = async () => {
+    const permissions = {
+      permissions: {
+        read: [
+          AppleHealthKit.Constants.Permissions.StepCount,
+          AppleHealthKit.Constants.Permissions.HeartRate,
+          AppleHealthKit.Constants.Permissions.SleepAnalysis,
+          AppleHealthKit.Constants.Permissions.Workout,
+        ],
+        write: [],
+      },
+    };
+
+    AppleHealthKit.initHealthKit(permissions, async (error) => {
+      if (error) {
+        console.log('Apple Health failed to initialize', error);
+      } else {
+        setIsAppleHealthLive(true);
+        await AsyncStorage.setItem('appleHealthLive', 'true');
       }
-    } catch (error) {
-      console.log('Health Connect failed to initialize', error);
-    }
+    });
   };
 
   return (
@@ -88,16 +93,16 @@ export default function Profile() {
           <Ionicons name="fitness" size={24} color="#a259ff" />
         </View>
         <View style={styles.wearableTextContainer}>
-          <Text style={styles.wearableTitle}>Google Fit / Health Connect</Text>
-          {isHealthConnectLive ? (
+          <Text style={styles.wearableTitle}>Apple Health</Text>
+          {isAppleHealthLive ? (
             <Text style={styles.wearableStatusLive}>● LIVE</Text>
           ) : (
             <Text style={styles.wearableStatusDisconnected}>Disconnected</Text>
           )}
         </View>
-        <TouchableOpacity style={styles.connectButton} onPress={handleConnectFit}>
+        <TouchableOpacity style={styles.connectButton} onPress={handleConnectHealth}>
           <Text style={styles.connectButtonText}>
-            {isHealthConnectLive ? 'Permissions' : '+ Connect'}
+            {isAppleHealthLive ? 'Permissions' : '+ Connect'}
           </Text>
         </TouchableOpacity>
       </View>
