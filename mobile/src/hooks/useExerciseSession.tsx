@@ -27,12 +27,13 @@ export const useExerciseSession = (date: Date) => {
           const workoutResults = results as any[];
           const mapped = workoutResults.map(w => ({
             metadata: {
-              id: w.id || `workout_${w.startDate}`,
-              lastModifiedTime: w.endDate || w.startDate,
+              id: w.id || `workout_${w.start || w.startDate}`,
+              lastModifiedTime: w.end || w.endDate || w.start || w.startDate,
             },
-            startTime: w.startDate,
-            endTime: w.endDate,
+            startTime: w.start || w.startDate,
+            endTime: w.end || w.endDate,
             exerciseType: mapAppleWorkoutTypeToHC(w.workoutActivityType || w.activityName || 'other'),
+            activityName: w.workoutActivityType || w.activityName || 'Other',
           }));
           resolve(mapped);
         }

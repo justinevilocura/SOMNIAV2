@@ -18,7 +18,7 @@ export default function Login() {
     const router = useRouter();
 
     // Use localhost for web development
-    const backendUrl = 'http://172.20.10.2:4000';
+    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.0.0.3:4000';
 
     const handleLogin = async () => {
         setIsLoading(true);

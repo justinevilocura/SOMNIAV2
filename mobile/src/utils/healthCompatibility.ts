@@ -14,6 +14,7 @@ export const ExerciseType = {
   RUNNING: 2,
   CYCLING: 3,
   SWIMMING: 4,
+  HIKING: 5,
 };
 
 export const mapAppleSleepStageToHC = (value: string): number => {
@@ -39,5 +40,6 @@ export const mapAppleWorkoutTypeToHC = (type: string): number => {
   if (upper.includes('RUN')) return ExerciseType.RUNNING;
   if (upper.includes('CYCLE') || upper.includes('BIKE')) return ExerciseType.CYCLING;
   if (upper.includes('SWIM')) return ExerciseType.SWIMMING;
+  if (upper.includes('HIKE')) return ExerciseType.HIKING;
   return ExerciseType.OTHER;
 };

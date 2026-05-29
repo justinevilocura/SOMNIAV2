@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, RefreshControl } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
-import React, { useEffect, useState, useContext } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState, useContext, useCallback } from 'react';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import styles from '../assets/styles/home.styles';
 import LinearGradient from 'react-native-linear-gradient';
 import BottomNav from '../components/BottomNav';
@@ -37,6 +37,7 @@ export default function Home() {
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState("");
   const [totalSteps, setTotalSteps] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [sleepData, setSleepData] = useState({
     labels: [],
     datasets: [
@@ -48,121 +49,153 @@ export default function Home() {
     ],
   });
 
-  useEffect(() => {
-    const fetchHealthData = async () => {
-      const authDataString = await AsyncStorage.getItem('authData');
-      if (authDataString) {
-        const authData = JSON.parse(authDataString);
-        setUserData({
-          name: authData.name || 'User',
-          email: authData.email || '',
-          user_id: authData.user_id || ''
+  const fetchHealthData = useCallback(async () => {
+    const authDataString = await AsyncStorage.getItem('authData');
+    if (authDataString) {
+      const authData = JSON.parse(authDataString);
+      setUserData({
+        name: authData.name || 'User',
+        email: authData.email || '',
+        user_id: authData.user_id || ''
+      });
+    }
+
+    let isInitialized = false;
+    let steps = [];
+    let heartRate = [];
+    let sleep = [];
+    let exerciseSession = [];
+
+    const permissions = {
+      permissions: {
+        read: [
+          AppleHealthKit.Constants.Permissions.StepCount,
+          AppleHealthKit.Constants.Permissions.HeartRate,
+          AppleHealthKit.Constants.Permissions.SleepAnalysis,
+          AppleHealthKit.Constants.Permissions.Workout,
+        ],
+        write: [],
+      },
+    };
+
+    const initHealth = (): Promise<boolean> => {
+      return new Promise((resolve) => {
+        AppleHealthKit.initHealthKit(permissions, (error) => {
+          if (error) {
+            console.warn('[ERROR] Cannot grant Apple HealthKit permissions:', error);
+            resolve(false);
+          } else {
+            resolve(true);
+          }
         });
+      });
+    };
+
+    try {
+      isInitialized = await initHealth();
+      if (isInitialized) {
+        steps = await readSteps() || [];
+        heartRate = await readHeartRate() || [];
+        sleep = await readSleepSession() || [];
+        exerciseSession = await readExerciseSession() || [];
+
+        console.log(`=== APPLE HEALTH REAL DATA ===`);
+        console.log(`Real Steps Count: ${steps.length}`);
+        console.log(`Real Heart Rate Count: ${heartRate.length}`);
+        console.log(`Real Sleep Count: ${sleep.length}`);
+        console.log(`Real Exercise Count: ${exerciseSession.length}`);
       }
+    } catch (error) {
+      console.warn('Apple Health not available:', error);
+    }
 
-      let isInitialized = false;
-      let steps = [];
-      let heartRate = [];
-      let sleep = [];
-      let exerciseSession = [];
+    if (exerciseSession.length > 0) {
+      const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
+      const start = new Date(lastExercise.startTime);
+      const end = new Date(lastExercise.endTime);
+      const totalExerciseMs = end.getTime() - start.getTime();
+      const totalMinutes = Math.floor(totalExerciseMs / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      let formattedExercise = '';
 
-      const permissions = {
-        permissions: {
-          read: [
-            AppleHealthKit.Constants.Permissions.StepCount,
-            AppleHealthKit.Constants.Permissions.HeartRate,
-            AppleHealthKit.Constants.Permissions.SleepAnalysis,
-            AppleHealthKit.Constants.Permissions.Workout,
-          ],
-          write: [],
-        },
-      };
-
-      const initHealth = (): Promise<boolean> => {
-        return new Promise((resolve) => {
-          AppleHealthKit.initHealthKit(permissions, (error) => {
-            if (error) {
-              console.warn('[ERROR] Cannot grant Apple HealthKit permissions:', error);
-              resolve(false);
-            } else {
-              resolve(true);
-            }
-          });
-        });
-      };
-
-      try {
-        isInitialized = await initHealth();
-        if (isInitialized) {
-          steps = await readSteps() || [];
-          heartRate = await readHeartRate() || [];
-          sleep = await readSleepSession() || [];
-          exerciseSession = await readExerciseSession() || [];
-
-          console.log(`=== APPLE HEALTH REAL DATA ===`);
-          console.log(`Real Steps Count: ${steps.length}`);
-          console.log(`Real Heart Rate Count: ${heartRate.length}`);
-          console.log(`Real Sleep Count: ${sleep.length}`);
-          console.log(`Real Exercise Count: ${exerciseSession.length}`);
-        }
-      } catch (error) {
-        console.warn('Apple Health not available:', error);
-      }
-
-      // REMOVED MOCK DATA - Use real data or empty arrays
-
-      if (exerciseSession.length > 0) {
-        const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
-        const start = new Date(lastExercise.startTime);
-        const end = new Date(lastExercise.endTime);
-        const totalExerciseMs = end.getTime() - start.getTime();
-        const totalMinutes = Math.floor(totalExerciseMs / (1000 * 60));
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        let formattedExercise = '';
-
-        if (hours > 0) {
-          formattedExercise = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-        } else {
-          formattedExercise = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-        }
-
-        setExerSession(formattedExercise);
-
-        const getExerciseName = (value: number): string | undefined => {
-          return Object.keys(ExerciseType).find(
-            (key) => ExerciseType[key as keyof typeof ExerciseType] === value
-          );
-        };
-        const exerciseName = getExerciseName(exerciseSession[0].exerciseType);
-        setExerType(exerciseName || 'Unknown');
+      if (hours > 0) {
+        formattedExercise = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
       } else {
-        setExerSession("No recent exercise");
-        setExerType("None");
+        formattedExercise = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
       }
 
-      setHeartRateData(heartRate);
-      setStepsData(steps);
-      const totalStepsSum = steps.reduce((sum: number, s: any) => sum + (s.count || 0), 0);
-      setTotalSteps(totalStepsSum);
-      if (heartRate.length > 0 && heartRate[0].samples.length > 0) {
-        setLatestHeartRate(heartRate[0].samples[0].beatsPerMinute);
+      setExerSession(formattedExercise);
+
+      const getExerciseName = (value: number): string | undefined => {
+        return Object.keys(ExerciseType).find(
+          (key) => ExerciseType[key as keyof typeof ExerciseType] === value
+        );
+      };
+      const exerciseName = getExerciseName(exerciseSession[0].exerciseType);
+      let displayName = exerciseName || 'Unknown';
+
+      if (displayName === 'OTHER' && exerciseSession[0].activityName) {
+        const rawName = exerciseSession[0].activityName;
+        // Split camelCase/PascalCase into words (e.g. "FunctionalStrengthTraining" -> "Functional Strength Training")
+        displayName = rawName
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+          .trim();
+      } else {
+        if (displayName === 'WALKING') displayName = 'Walking';
+        else if (displayName === 'RUNNING') displayName = 'Running';
+        else if (displayName === 'CYCLING') displayName = 'Cycling';
+        else if (displayName === 'SWIMMING') displayName = 'Swimming';
+        else if (displayName === 'HIKING') displayName = 'Hiking';
+        else if (displayName === 'OTHER') displayName = 'Other';
       }
 
-      // REMOVED SLEEP MOCK DATA
+      setExerType(displayName);
+    } else {
+      setExerSession("No recent exercise");
+      setExerType("None");
+    }
 
-      if (sleep.length > 0) {
-        setSleepDataRaw(sleep);
-        
-        // Grab the most recent sleep session to prevent overlapping bugs
-        const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
-        const latestSleep = sortedSleep[0];
-        
-        const start = new Date(latestSleep.startTime);
-        const end = new Date(latestSleep.endTime);
-        const totalSleepMs = end.getTime() - start.getTime();
-        
-        const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
+    setHeartRateData(heartRate);
+    setStepsData(steps);
+    const totalStepsSum = steps.reduce((sum: number, s: any) => sum + (s.count || 0), 0);
+    setTotalSteps(Math.floor(totalStepsSum));
+    if (heartRate.length > 0 && heartRate[0].samples.length > 0) {
+      setLatestHeartRate(heartRate[0].samples[0].beatsPerMinute);
+    }
+
+    if (sleep.length > 0) {
+      setSleepDataRaw(sleep);
+
+      const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+      const latestSleep = sortedSleep[0];
+
+      const start = new Date(latestSleep.startTime);
+      const end = new Date(latestSleep.endTime);
+
+      const today = new Date();
+      const endedToday = end.getDate() === today.getDate() &&
+        end.getMonth() === today.getMonth() &&
+        end.getFullYear() === today.getFullYear();
+
+      if (endedToday) {
+        const sleepStages = latestSleep.stages || [];
+        let asleepMs = 0;
+        sleepStages.forEach(s => {
+          if ([SleepStageType.LIGHT, SleepStageType.DEEP, SleepStageType.REM, SleepStageType.SLEEPING].includes(s.stage)) {
+            const sStart = new Date(s.startTime).getTime();
+            const sEnd = new Date(s.endTime).getTime();
+            asleepMs += (sEnd - sStart);
+          }
+        });
+
+        // Fallback to total duration if no asleep stages were found
+        if (asleepMs === 0) {
+          asleepMs = end.getTime() - start.getTime();
+        }
+
+        const totalMinutes = Math.floor(asleepMs / (1000 * 60));
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
         const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
@@ -170,47 +203,70 @@ export default function Home() {
       } else {
         setTotalSleepHours("0 hours and 0 minutes");
       }
+    } else {
+      setTotalSleepHours("0 hours and 0 minutes");
+    }
 
-      // Sleep Graph
-      const labels: string[] = [];
-      const data: number[] = [];
-      const sleepStages = sleep.flatMap(session => session.stages || []);
+    const labels: string[] = [];
+    const data: number[] = [];
 
-      const getStageValue = (value: number): number => {
-        switch (value) {
-          case SleepStageType.AWAKE: return 1;
-          case SleepStageType.LIGHT: return 2;
-          case SleepStageType.DEEP: return 3;
-          case SleepStageType.REM: return 4;
-          default: return 0;
-        }
-      };
-
-      sleepStages.forEach((stage) => {
-        const start = new Date(stage.startTime);
-        const hour = start.getHours();
-        const minute = String(start.getMinutes()).padStart(2, '0');
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        const displayHour = hour % 12 || 12;
-        labels.push(`${displayHour}:${minute} ${ampm}`);
-        const numericValue = getStageValue(stage.stage);
-        data.push(numericValue);
-      });
-
-      setSleepData({
-        labels,
-        datasets: [
-          {
-            data,
-            color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
-            strokeWidth: 0, // Remove line
-          },
-        ],
-      });
+    const getStageValue = (value: number): number => {
+      switch (value) {
+        case SleepStageType.AWAKE: return 1;
+        case SleepStageType.LIGHT: return 2;
+        case SleepStageType.DEEP: return 3;
+        case SleepStageType.REM: return 4;
+        default: return 0;
+      }
     };
 
-    fetchHealthData();
-  }, []);
+    if (sleep.length > 0) {
+      const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+      const latestSleep = sortedSleep[0];
+      const end = new Date(latestSleep.endTime);
+      const today = new Date();
+      const endedToday = end.getDate() === today.getDate() &&
+        end.getMonth() === today.getMonth() &&
+        end.getFullYear() === today.getFullYear();
+
+      if (endedToday) {
+        const sleepStages = [...(latestSleep.stages || [])].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+        sleepStages.forEach((stage) => {
+          const start = new Date(stage.startTime);
+          const hour = start.getHours();
+          const minute = String(start.getMinutes()).padStart(2, '0');
+          const ampm = hour >= 12 ? 'PM' : 'AM';
+          const displayHour = hour % 12 || 12;
+          labels.push(`${displayHour}:${minute} ${ampm}`);
+          const numericValue = getStageValue(stage.stage);
+          data.push(numericValue);
+        });
+      }
+    }
+
+    setSleepData({
+      labels: labels.length > 0 ? labels : ['No Data'],
+      datasets: [
+        {
+          data: data.length > 0 ? data : [0],
+          color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
+          strokeWidth: 0,
+        },
+      ],
+    });
+  }, [readExerciseSession, readHeartRate, readSleepSession, readSteps]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchHealthData();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchHealthData();
+    setRefreshing(false);
+  }, [fetchHealthData]);
 
   const params = useLocalSearchParams();
   const [selectedTab, setSelectedTab] = useState(params.tab ? params.tab.toString() : 'home');
@@ -254,7 +310,17 @@ export default function Home() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 100 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#a259ff"
+            colors={["#a259ff"]}
+          />
+        }
+      >
         <View style={{ paddingHorizontal: 16 }}>
           <Text style={{
             color: 'skyblue',

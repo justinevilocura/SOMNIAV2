@@ -27,7 +27,7 @@ export const useSteps = (date: Date) => {
               id: s.id || `step_${s.startDate}`,
               lastModifiedTime: s.endDate || s.startDate,
             },
-            count: s.value,
+            count: s.value || 0,
             startTime: s.startDate,
             endTime: s.endDate,
           }));

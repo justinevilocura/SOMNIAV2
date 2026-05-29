@@ -34,7 +34,7 @@ export default function SleepGoals() {
     }
   };
 
-  const backendUrl = 'http://172.20.10.2:4000';
+  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.0.0.3:4000';
 
   const saveGoals = async () => {
     try {
