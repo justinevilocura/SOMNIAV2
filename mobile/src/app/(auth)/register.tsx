@@ -15,7 +15,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
 
   const router = useRouter();
-  const backendUrl = 'http://172.20.10.2:4000';
+  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.0.0.3:4000';
 
   const handleRegister = async () => {
     console.log('Register button pressed!');

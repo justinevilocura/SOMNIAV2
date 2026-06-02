@@ -83,13 +83,13 @@ export const getLatestSleepSession = async (req, res) => {
       stagesCount: latestSession.stages?.length || 0
     });
 
-    // Calculate duration for the latest session only
+    // Calculate duration for the latest session only (excluding AWAKE (1) and OUT_OF_BED (3) stages)
     let sessionDurationMinutes = 0;
 
     if (latestSession.stages && latestSession.stages.length > 0) {
       // Calculate sleep time from stages
       latestSession.stages.forEach(stage => {
-        if (stage.startTime && stage.endTime) {
+        if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
           const stageStartTime = new Date(stage.startTime);
           const stageEndTime = new Date(stage.endTime);
           const stageDurationMs = stageEndTime - stageStartTime;
@@ -106,14 +106,16 @@ export const getLatestSleepSession = async (req, res) => {
       sessionDurationMinutes = sessionDurationMs / (1000 * 60);
     }
 
-    const sessionDurationHours = Math.round((sessionDurationMinutes / 60) * 100) / 100;
+    // Ceiling to match Apple Health/mobile app display rounding
+    const roundedMinutes = Math.ceil(sessionDurationMinutes);
+    const sessionDurationHours = Math.round((roundedMinutes / 60) * 100) / 100;
 
-    console.log(`Latest session duration: ${Math.round(sessionDurationMinutes)} minutes (${sessionDurationHours} hours)`);
+    console.log(`Latest session duration: ${roundedMinutes} minutes (${sessionDurationHours} hours)`);
 
     return res.status(200).json({
       success: true,
       data: {
-        latestSessionMinutes: Math.round(sessionDurationMinutes),
+        latestSessionMinutes: roundedMinutes,
         latestSessionHours: sessionDurationHours,
         sessionStartTime: latestSession.startTime,
         sessionEndTime: latestSession.endTime,
@@ -166,7 +168,7 @@ export const getSleepSessions = async (req, res) => {
       });
     }
 
-    // Calculate total sleep time from all sessions
+    // Calculate total sleep time from all sessions (excluding AWAKE (1) and OUT_OF_BED (3) stages)
     let totalSleepMinutes = 0;
     let validSessionCount = 0;
 
@@ -174,7 +176,7 @@ export const getSleepSessions = async (req, res) => {
       if (session.stages && session.stages.length > 0) {
         // Calculate sleep time from stages
         session.stages.forEach(stage => {
-          if (stage.startTime && stage.endTime) {
+          if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
             const stageStartTime = new Date(stage.startTime);
             const stageEndTime = new Date(stage.endTime);
             const stageDurationMs = stageEndTime - stageStartTime;
@@ -196,14 +198,15 @@ export const getSleepSessions = async (req, res) => {
       }
     });
 
-    console.log(`Total sleep time calculated: ${Math.round(totalSleepMinutes)} minutes across ${validSessionCount} sessions`);
+    const roundedTotalMinutes = Math.ceil(totalSleepMinutes);
+    console.log(`Total sleep time calculated: ${roundedTotalMinutes} minutes across ${validSessionCount} sessions`);
 
-    const totalSleepHours = Math.round((totalSleepMinutes / 60) * 100) / 100; // Round to 2 decimal places
+    const totalSleepHours = Math.round((roundedTotalMinutes / 60) * 100) / 100; // Round to 2 decimal places
 
     return res.status(200).json({
       success: true,
       data: {
-        totalSleepMinutes: Math.round(totalSleepMinutes),
+        totalSleepMinutes: roundedTotalMinutes,
         totalSleepHours,
         sessionCount: validSessionCount,
         recordCount: sleepSessions.length
@@ -297,9 +300,9 @@ export const getSleepHistory = async (req, res) => {
       let sessionDurationMinutes = 0;
 
       if (session.stages && session.stages.length > 0) {
-        // Calculate from stages
+        // Calculate from stages (excluding AWAKE (1) and OUT_OF_BED (3))
         session.stages.forEach(stage => {
-          if (stage.startTime && stage.endTime) {
+          if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
             const stageStartTime = new Date(stage.startTime);
             const stageEndTime = new Date(stage.endTime);
             const stageDurationMs = stageEndTime - stageStartTime;
@@ -315,7 +318,8 @@ export const getSleepHistory = async (req, res) => {
         sessionDurationMinutes = sessionDurationMs / (1000 * 60);
       }
 
-      totalSleepMinutes += sessionDurationMinutes;
+      const roundedSessionMinutes = Math.ceil(sessionDurationMinutes);
+      totalSleepMinutes += roundedSessionMinutes;
       validSessionCount++;
 
       return {
@@ -325,8 +329,8 @@ export const getSleepHistory = async (req, res) => {
         stages: session.stages || [],
         title: session.title,
         lastModifiedTime: session.lastModifiedTime,
-        durationMinutes: Math.round(sessionDurationMinutes),
-        durationHours: Math.round((sessionDurationMinutes / 60) * 100) / 100
+        durationMinutes: roundedSessionMinutes,
+        durationHours: Math.round((roundedSessionMinutes / 60) * 100) / 100
       };
     });
 
@@ -344,7 +348,7 @@ export const getSleepHistory = async (req, res) => {
           averageDuration: Math.round(averageDurationMinutes),
           averageDurationHours: Math.round((averageDurationMinutes / 60) * 100) / 100,
           totalSleepHours: totalSleepHours,
-          totalSleepMinutes: Math.round(totalSleepMinutes),
+          totalSleepMinutes: totalSleepMinutes,
           dateRange: {
             from: sixtyDaysAgo.toISOString(),
             to: new Date().toISOString()

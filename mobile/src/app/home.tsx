@@ -180,22 +180,25 @@ export default function Home() {
         end.getFullYear() === today.getFullYear();
 
       if (endedToday) {
-        const sleepStages = latestSleep.stages || [];
-        let asleepMs = 0;
-        sleepStages.forEach(s => {
-          if ([SleepStageType.LIGHT, SleepStageType.DEEP, SleepStageType.REM, SleepStageType.SLEEPING].includes(s.stage)) {
-            const sStart = new Date(s.startTime).getTime();
-            const sEnd = new Date(s.endTime).getTime();
-            asleepMs += (sEnd - sStart);
-          }
-        });
+        let asleepMs = latestSleep.asleepMs;
+        if (asleepMs === undefined || asleepMs === null) {
+          const sleepStages = latestSleep.stages || [];
+          asleepMs = 0;
+          sleepStages.forEach(s => {
+            if ([SleepStageType.LIGHT, SleepStageType.DEEP, SleepStageType.REM, SleepStageType.SLEEPING].includes(s.stage)) {
+              const sStart = new Date(s.startTime).getTime();
+              const sEnd = new Date(s.endTime).getTime();
+              asleepMs += (sEnd - sStart);
+            }
+          });
 
-        // Fallback to total duration if no asleep stages were found
-        if (asleepMs === 0) {
-          asleepMs = end.getTime() - start.getTime();
+          // Fallback to total duration if no asleep stages were found
+          if (asleepMs === 0) {
+            asleepMs = end.getTime() - start.getTime();
+          }
         }
 
-        const totalMinutes = Math.floor(asleepMs / (1000 * 60));
+        const totalMinutes = Math.ceil(asleepMs / (1000 * 60));
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
         const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;

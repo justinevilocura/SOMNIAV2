@@ -3,11 +3,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.0.0.3:4000';
 
 const handleResponse = async (response: Response, dataType: string) => {
+    const text = await response.text();
     if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to sync ${dataType} data: ${errorData.message || response.statusText}`);
+        let errorMessage = response.statusText;
+        try {
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.message || errorMessage;
+        } catch (_) {
+            errorMessage = text.substring(0, 200) || errorMessage;
+        }
+        throw new Error(`Failed to sync ${dataType} data (${response.status}): ${errorMessage}`);
     }
-    return response.json();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        throw new Error(`Failed to parse response for ${dataType}: ${text.substring(0, 200)}`);
+    }
 };
 
 const getAuthToken = async () => {

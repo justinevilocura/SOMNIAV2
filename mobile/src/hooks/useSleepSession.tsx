@@ -35,6 +35,7 @@ export const useSleepSession = (date: Date) => {
             endTime: session.endTime,
             title: session.title,
             stages: session.stages,
+            asleepMs: session.asleepMs,
           }));
           resolve(mapped);
         }
