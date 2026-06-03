@@ -62,8 +62,11 @@ export const register = async (req, res) => {
             created with email id: ${email}`,
         }
 
-        
-        await transporter.sendMail(mailOptions);
+        try {
+            await transporter.sendMail(mailOptions);
+        } catch (emailError) {
+            console.log("Welcome email could not be sent (likely missing .env credentials), but registration will proceed:", emailError.message);
+        }
 
         return res.status(201).json({ success: true, message: "User registered successfully" });
 

@@ -66,4 +66,3 @@ app.use('/api/spo2', spo2Router);
 app.use('/api/ai', aiRouter);
 
 app.listen(port, () => console.log(`Server started on PORT:${port}`));
-

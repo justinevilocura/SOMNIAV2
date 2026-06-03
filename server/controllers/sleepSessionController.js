@@ -86,25 +86,11 @@ export const getLatestSleepSession = async (req, res) => {
     // Calculate duration for the latest session only
     let sessionDurationMinutes = 0;
 
-    if (latestSession.stages && latestSession.stages.length > 0) {
-      // Calculate sleep time from stages
-      latestSession.stages.forEach(stage => {
-        if (stage.startTime && stage.endTime) {
-          const stageStartTime = new Date(stage.startTime);
-          const stageEndTime = new Date(stage.endTime);
-          const stageDurationMs = stageEndTime - stageStartTime;
-          const stageDurationMinutes = stageDurationMs / (1000 * 60);
-          
-          sessionDurationMinutes += stageDurationMinutes;
-        }
-      });
-    } else {
-      // Fallback: use session start/end time if no stages
-      const sessionStartTime = new Date(latestSession.startTime);
-      const sessionEndTime = new Date(latestSession.endTime);
-      const sessionDurationMs = sessionEndTime - sessionStartTime;
-      sessionDurationMinutes = sessionDurationMs / (1000 * 60);
-    }
+    // Match mobile app calculation: just use absolute boundaries, no stage summation
+    const sessionStartTime = new Date(latestSession.startTime);
+    const sessionEndTime = new Date(latestSession.endTime);
+    const sessionDurationMs = sessionEndTime - sessionStartTime;
+    sessionDurationMinutes = sessionDurationMs / (1000 * 60);
 
     const sessionDurationHours = Math.round((sessionDurationMinutes / 60) * 100) / 100;
 
@@ -171,29 +157,14 @@ export const getSleepSessions = async (req, res) => {
     let validSessionCount = 0;
 
     sleepSessions.forEach(session => {
-      if (session.stages && session.stages.length > 0) {
-        // Calculate sleep time from stages
-        session.stages.forEach(stage => {
-          if (stage.startTime && stage.endTime) {
-            const stageStartTime = new Date(stage.startTime);
-            const stageEndTime = new Date(stage.endTime);
-            const stageDurationMs = stageEndTime - stageStartTime;
-            const stageDurationMinutes = stageDurationMs / (1000 * 60);
-            
-            totalSleepMinutes += stageDurationMinutes;
-          }
-        });
-        validSessionCount++;
-      } else {
-        // Fallback: use session start/end time if no stages
-        const sessionStartTime = new Date(session.startTime);
-        const sessionEndTime = new Date(session.endTime);
-        const sessionDurationMs = sessionEndTime - sessionStartTime;
-        const sessionDurationMinutes = sessionDurationMs / (1000 * 60);
-        
-        totalSleepMinutes += sessionDurationMinutes;
-        validSessionCount++;
-      }
+      // Match mobile app calculation
+      const sessionStartTime = new Date(session.startTime);
+      const sessionEndTime = new Date(session.endTime);
+      const sessionDurationMs = sessionEndTime - sessionStartTime;
+      const sessionDurationMinutes = sessionDurationMs / (1000 * 60);
+      
+      totalSleepMinutes += sessionDurationMinutes;
+      validSessionCount++;
     });
 
     console.log(`Total sleep time calculated: ${Math.round(totalSleepMinutes)} minutes across ${validSessionCount} sessions`);

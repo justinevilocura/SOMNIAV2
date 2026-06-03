@@ -342,8 +342,8 @@ export default function Home() {
               {statBoxes.map((box, idx) => {
                 if (box.label === 'Latest Heart Rate') {
                   return (
-                    <TouchableOpacity 
-                      key={idx} 
+                    <TouchableOpacity
+                      key={idx}
                       style={[styles.statBox, { backgroundColor: box.color + '22' }]}
                       activeOpacity={1}
                       onLongPress={() => {

@@ -56,7 +56,7 @@ export const getExerciseSessions = async (req, res) => {
         }
 
         const skip = (page - 1) * parseInt(limit);
-        
+
         const exerciseData = await ExerciseSession.find(query)
             .sort({ startTime: -1 })
             .limit(parseInt(limit))
@@ -64,8 +64,8 @@ export const getExerciseSessions = async (req, res) => {
 
         const totalCount = await ExerciseSession.countDocuments(query);
 
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             data: exerciseData,
             pagination: {
                 currentPage: parseInt(page),
@@ -122,19 +122,19 @@ export const updateExerciseSession = async (req, res) => {
         if (exerciseType !== undefined) {
             exerciseData.exerciseType = exerciseType;
         }
-        
+
         if (lastModifiedTime) {
             exerciseData.lastModifiedTime = new Date(lastModifiedTime);
         }
-        
+
         if (title !== undefined) {
             exerciseData.title = title;
         }
-        
+
         if (startTime) {
             exerciseData.startTime = new Date(startTime);
         }
-        
+
         if (endTime) {
             exerciseData.endTime = new Date(endTime);
         }
@@ -220,8 +220,8 @@ export const getExerciseStats = async (req, res) => {
         ]);
 
         if (stats.length === 0) {
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 data: {
                     totalSessions: 0,
                     totalDurationMs: 0,
@@ -232,8 +232,8 @@ export const getExerciseStats = async (req, res) => {
             });
         }
 
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             data: {
                 totalSessions: stats[0].totalSessions,
                 totalDurationMs: stats[0].totalDuration,
