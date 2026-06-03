@@ -1,5 +1,4 @@
 <p align="center">
-  <img src="shared/images/SOMNiA.png" alt="SOMNiA LOGO" />
   <img src="https://cit.edu/wp-content/uploads/2023/07/cit-logo.png" alt="CIT LOGO" />
 </p>
 ## 🚀 How to Run the Project
