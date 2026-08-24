@@ -126,11 +126,44 @@ export default function Home() {
       setExerType("None");
     }
 
-    setStepsData(steps);
     if (steps.length > 0) {
-      const total = steps.reduce((sum, record) => sum + record.count, 0);
+      // Group steps by package name (dataOrigin) to prevent duplicate counting
+      const stepsBySource: { [key: string]: typeof steps } = {};
+      steps.forEach(record => {
+        const source = record.metadata?.dataOrigin || 'unknown';
+        if (!stepsBySource[source]) {
+          stepsBySource[source] = [];
+        }
+        stepsBySource[source].push(record);
+      });
+
+      const sources = Object.keys(stepsBySource);
+      let selectedSteps: typeof steps = [];
+      
+      // Prioritize Xiaomi/Mi Fitness, then Samsung Health, then whichever has the highest sum
+      const xiaomiSource = sources.find(s => s.toLowerCase().includes('xiaomi') || s.toLowerCase().includes('mi'));
+      const samsungSource = sources.find(s => s.toLowerCase().includes('samsung') || s.toLowerCase().includes('shealth'));
+      
+      if (xiaomiSource) {
+        selectedSteps = stepsBySource[xiaomiSource];
+      } else if (samsungSource) {
+        selectedSteps = stepsBySource[samsungSource];
+      } else {
+        let maxCount = -1;
+        sources.forEach(source => {
+          const sum = stepsBySource[source].reduce((s, r) => s + r.count, 0);
+          if (sum > maxCount) {
+            maxCount = sum;
+            selectedSteps = stepsBySource[source];
+          }
+        });
+      }
+
+      setStepsData(selectedSteps);
+      const total = selectedSteps.reduce((sum, record) => sum + record.count, 0);
       setTotalSteps(total);
     } else {
+      setStepsData([]);
       setTotalSteps(0);
     }
 
