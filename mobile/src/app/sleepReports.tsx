@@ -26,7 +26,7 @@ export default function SleepReports() {
 
   const fetchSleepData = async () => {
     try {
-      const backendUrl = 'http://172.20.10.2:4000';
+      const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.50.77.201:4000';
       const token = await AsyncStorage.getItem('token');
 
       if (!token) return;
