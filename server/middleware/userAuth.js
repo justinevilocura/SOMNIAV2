@@ -40,6 +40,7 @@ const userAuth = async (req, res, next) => {
 
       req.body = req.body || {};
       req.body.userId = tokenDecode.id;
+      req.user = { id: tokenDecode.id };
       next();
     } catch (error) {
       res.clearCookie('token', {

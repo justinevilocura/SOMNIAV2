@@ -5,10 +5,23 @@ const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.50.77.201:4000'
 
 const handleResponse = async (response: Response, dataType: string) => {
     if (!response.ok) {
-        const errorData = await response.json();
+        const text = await response.text();
+        let errorData;
+        try {
+            errorData = JSON.parse(text);
+        } catch (e) {
+            console.error(`Raw HTML response for ${dataType}:`, text.substring(0, 500));
+            throw new Error(`Failed to sync ${dataType} data: Server returned HTML instead of JSON. Status: ${response.status}`);
+        }
         throw new Error(`Failed to sync ${dataType} data: ${errorData.message || response.statusText}`);
     }
-    return response.json();
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error(`Raw HTML success response for ${dataType}:`, text.substring(0, 500));
+        throw new Error(`Failed to parse success response for ${dataType}. Status: ${response.status}`);
+    }
 };
 
 const getAuthToken = async () => {
@@ -29,6 +42,7 @@ export const syncToDB = async (
     heartRate: RecordResult<"HeartRate">[],
     sleepSession: RecordResult<"SleepSession">[],
     steps: RecordResult<"Steps">[],
+    exerciseSession: RecordResult<"ExerciseSession">[],
     userID: string
 ) => {
     try {
@@ -96,6 +110,26 @@ export const syncToDB = async (
             body: JSON.stringify(stepsPayload),
         });
         await handleResponse(stepsResponse, "steps");
+
+        // Exercise Session
+        if (exerciseSession && exerciseSession.length > 0) {
+            const exercisePayload = exerciseSession.map((record) => ({
+                userId: userID,
+                id: record.metadata.id,
+                lastModifiedTime: record.metadata.lastModifiedTime,
+                startTime: record.startTime,
+                endTime: record.endTime,
+                title: record.title || null,
+                exerciseType: record.exerciseType || 0,
+            }));
+
+            const exerciseResponse = await fetch(`${backendUrl}/api/exercise/bulkAddExercise`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ exerciseRecords: exercisePayload }),
+            });
+            await handleResponse(exerciseResponse, "exercise session");
+        }
 
         console.log("Health data synced successfully.");
     } catch (error) {

@@ -32,6 +32,7 @@ export default function Home() {
   const [heartRateData, setHeartRateData] = useState([]);
   const [sleepDataRaw, setSleepDataRaw] = useState([]);
   const [stepsData, setStepsData] = useState([]);
+  const [exerciseDataRaw, setExerciseDataRaw] = useState([]);
   const [exerSession, setExerSession] = useState("");
   const [exerType, setExerType] = useState("");
   const [latestHeartRate, setLatestHeartRate] = useState(0);
@@ -98,6 +99,7 @@ export default function Home() {
 
     let lastExerciseSession: any = null;
     if (exerciseSession.length > 0) {
+      setExerciseDataRaw(exerciseSession);
       const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
       lastExerciseSession = lastExercise;
       const start = new Date(lastExercise.startTime);
@@ -451,7 +453,7 @@ export default function Home() {
                 }
                 try {
                   Toast.show({ type: 'info', text1: 'Syncing...', text2: 'Please wait' });
-                  await syncToDB(heartRateData, sleepDataRaw, stepsData, userData.user_id);
+                  await syncToDB(heartRateData, sleepDataRaw, stepsData, exerciseDataRaw, userData.user_id);
                   Toast.show({ type: 'success', text1: 'Sync Successful', text2: 'Health data saved to database!' });
                 } catch (error) {
                   Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message });

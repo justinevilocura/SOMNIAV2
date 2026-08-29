@@ -1,4 +1,4 @@
-import ExerciseSession from '../models/exerciseSessionModel.js';
+import ExerciseSession from '../models/exerciseModel.js';
 
 export const addExerciseSession = async (req, res) => {
     const { exerciseType, lastModifiedTime, id, title, startTime, endTime } = req.body;
