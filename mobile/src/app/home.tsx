@@ -96,8 +96,10 @@ export default function Home() {
 
     // REMOVED MOCK DATA - Use real data or empty arrays
 
+    let lastExerciseSession: any = null;
     if (exerciseSession.length > 0) {
       const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
+      lastExerciseSession = lastExercise;
       const start = new Date(lastExercise.startTime);
       const end = new Date(lastExercise.endTime);
       const totalExerciseMs = end.getTime() - start.getTime();
@@ -167,43 +169,34 @@ export default function Home() {
       setTotalSteps(0);
     }
 
-    setHeartRateData(heartRate);
-    if (heartRate.length > 0) {
-      // Add a 24-hour buffer to account for extreme Xiaomi timezone bugs!
-      const nowWithBuffer = Date.now() + (24 * 60 * 60 * 1000);
-      const allSamples = heartRate.flatMap(record => record.samples || []);
 
-      // Filter out extreme future glitches (e.g. wrong timezone), but allow slight clock drift
-      const validSamples = allSamples.filter(sample => new Date(sample.time).getTime() <= nowWithBuffer);
-
-      if (validSamples.length > 0) {
-        const sortedSamples = validSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-
-        console.log(`=== TOP 3 HEART RATE SAMPLES ===`);
-        sortedSamples.slice(0, 3).forEach((s, i) => {
-          console.log(`#${i + 1}: ${s.beatsPerMinute} BPM at ${s.time}`);
-        });
-
-        setLatestHeartRate(sortedSamples[0].beatsPerMinute);
-      } else {
-        setLatestHeartRate(0);
-      }
-    } else {
-      setLatestHeartRate(0);
-    }
 
     // REMOVED SLEEP MOCK DATA
 
+    let lastSleepSession: any = null;
     if (sleep.length > 0) {
       setSleepDataRaw(sleep);
 
       // Grab the most recent sleep session to prevent overlapping bugs
       const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
       const latestSleep = sortedSleep[0];
+      lastSleepSession = latestSleep;
 
-      const start = new Date(latestSleep.startTime);
-      const end = new Date(latestSleep.endTime);
-      const totalSleepMs = end.getTime() - start.getTime();
+      let totalSleepMs = 0;
+      if (latestSleep.stages && latestSleep.stages.length > 0) {
+        latestSleep.stages.forEach((stage: any) => {
+          if (stage.stage !== 1) { // Exclude AWAKE stage (1)
+            const stageStart = new Date(stage.startTime).getTime();
+            const stageEnd = new Date(stage.endTime).getTime();
+            totalSleepMs += (stageEnd - stageStart);
+          }
+        });
+      }
+      if (totalSleepMs === 0) {
+        const start = new Date(latestSleep.startTime);
+        const end = new Date(latestSleep.endTime);
+        totalSleepMs = end.getTime() - start.getTime();
+      }
 
       const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
       const hours = Math.floor(totalMinutes / 60);
@@ -250,6 +243,55 @@ export default function Home() {
         },
       ],
     });
+
+    // --- NEW HEART RATE LOGIC ---
+    setHeartRateData(heartRate);
+    if (heartRate.length > 0) {
+      const nowWithBuffer = Date.now() + (24 * 60 * 60 * 1000);
+      const allSamples = heartRate.flatMap(record => record.samples || []);
+      const validSamples = allSamples.filter(sample => new Date(sample.time).getTime() <= nowWithBuffer);
+
+      if (validSamples.length > 0) {
+        let mostRecentSession = null;
+        if (lastExerciseSession && lastSleepSession) {
+          if (new Date(lastExerciseSession.endTime).getTime() > new Date(lastSleepSession.endTime).getTime()) {
+            mostRecentSession = lastExerciseSession;
+          } else {
+            mostRecentSession = lastSleepSession;
+          }
+        } else if (lastExerciseSession) {
+          mostRecentSession = lastExerciseSession;
+        } else if (lastSleepSession) {
+          mostRecentSession = lastSleepSession;
+        }
+
+        if (mostRecentSession) {
+          const sessionStart = new Date(mostRecentSession.startTime).getTime();
+          const sessionEnd = new Date(mostRecentSession.endTime).getTime();
+          
+          const sessionSamples = validSamples.filter(sample => {
+            const time = new Date(sample.time).getTime();
+            return time >= sessionStart && time <= sessionEnd;
+          });
+
+          if (sessionSamples.length > 0) {
+            const sum = sessionSamples.reduce((acc, curr) => acc + curr.beatsPerMinute, 0);
+            const avg = Math.floor(sum / sessionSamples.length);
+            setLatestHeartRate(avg);
+          } else {
+            const sortedSamples = validSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+            setLatestHeartRate(sortedSamples[0].beatsPerMinute);
+          }
+        } else {
+          const sortedSamples = validSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+          setLatestHeartRate(sortedSamples[0].beatsPerMinute);
+        }
+      } else {
+        setLatestHeartRate(0);
+      }
+    } else {
+      setLatestHeartRate(0);
+    }
   };
 
   useEffect(() => {
@@ -285,7 +327,7 @@ export default function Home() {
     { label: exerSession, value: exerType, unit: '', icon: 'barbell-outline', color: '#ff8c42' },
     { label: 'Total Steps Today', value: totalSteps, unit: '', icon: 'walk-outline', color: '#43e97b' },
     { label: 'Hours of Sleep', value: totalSleepHours, unit: '', icon: 'moon-outline', color: '#5d3fd3' },
-    { label: 'Latest Heart Rate', value: latestHeartRate, unit: 'bpm', icon: 'heart-outline', color: '#ff4d6d' },
+    { label: 'Session Avg BPM', value: latestHeartRate, unit: 'bpm', icon: 'heart-outline', color: '#ff4d6d' },
   ];
 
   return (
@@ -373,7 +415,7 @@ export default function Home() {
 
             <View style={styles.statsBoxContainer}>
               {statBoxes.map((box, idx) => {
-                if (box.label === 'Latest Heart Rate') {
+                if (box.label === 'Session Avg BPM') {
                   return (
                     <TouchableOpacity
                       key={idx}

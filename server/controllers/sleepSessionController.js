@@ -86,10 +86,17 @@ export const getLatestSleepSession = async (req, res) => {
     // Calculate duration for the latest session only
     let sessionDurationMinutes = 0;
 
-    // Match mobile app calculation: just use absolute boundaries, no stage summation
-    const sessionStartTime = new Date(latestSession.startTime);
-    const sessionEndTime = new Date(latestSession.endTime);
-    const sessionDurationMs = sessionEndTime - sessionStartTime;
+    let sessionDurationMs = 0;
+    if (latestSession.stages && latestSession.stages.length > 0) {
+      latestSession.stages.forEach(stage => {
+        if (stage.stage !== 1) {
+          sessionDurationMs += (new Date(stage.endTime) - new Date(stage.startTime));
+        }
+      });
+    }
+    if (sessionDurationMs === 0) {
+      sessionDurationMs = new Date(latestSession.endTime) - new Date(latestSession.startTime);
+    }
     sessionDurationMinutes = sessionDurationMs / (1000 * 60);
 
     const sessionDurationHours = Math.round((sessionDurationMinutes / 60) * 100) / 100;
@@ -157,10 +164,17 @@ export const getSleepSessions = async (req, res) => {
     let validSessionCount = 0;
 
     sleepSessions.forEach(session => {
-      // Match mobile app calculation
-      const sessionStartTime = new Date(session.startTime);
-      const sessionEndTime = new Date(session.endTime);
-      const sessionDurationMs = sessionEndTime - sessionStartTime;
+      let sessionDurationMs = 0;
+      if (session.stages && session.stages.length > 0) {
+        session.stages.forEach(stage => {
+          if (stage.stage !== 1) {
+            sessionDurationMs += (new Date(stage.endTime) - new Date(stage.startTime));
+          }
+        });
+      }
+      if (sessionDurationMs === 0) {
+        sessionDurationMs = new Date(session.endTime) - new Date(session.startTime);
+      }
       const sessionDurationMinutes = sessionDurationMs / (1000 * 60);
       
       totalSleepMinutes += sessionDurationMinutes;
@@ -268,9 +282,9 @@ export const getSleepHistory = async (req, res) => {
       let sessionDurationMinutes = 0;
 
       if (session.stages && session.stages.length > 0) {
-        // Calculate from stages
+        // Calculate from stages, excluding AWAKE (stage: 1)
         session.stages.forEach(stage => {
-          if (stage.startTime && stage.endTime) {
+          if (stage.stage !== 1 && stage.startTime && stage.endTime) {
             const stageStartTime = new Date(stage.startTime);
             const stageEndTime = new Date(stage.endTime);
             const stageDurationMs = stageEndTime - stageStartTime;

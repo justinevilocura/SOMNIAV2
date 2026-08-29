@@ -4,7 +4,7 @@ import { TimeRangeFilter } from 'react-native-health-connect/lib/typescript/type
 
 export const useHeartRate = (date: Date) => {
   const startDate = new Date(date);
-  startDate.setDate(startDate.getDate() - 3); // Look back 3 days
+  startDate.setDate(startDate.getDate() - 30); // Look back 30 days
   startDate.setHours(0, 0, 0, 0);
 
   const endDate = new Date(date); // Clone for end
