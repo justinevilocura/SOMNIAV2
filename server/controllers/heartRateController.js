@@ -1,14 +1,26 @@
 import HeartRate from '../models/heartRateModel.js';
+import userModel from '../models/userModel.js';
 
 export const addHeartRate = async (req, res) => {
-  const records = req.body; // assuming array of heart rate records
+  let records = req.body;
+  let sessionAvgBpm = null;
+
+  if (!Array.isArray(req.body) && req.body.records) {
+    records = req.body.records;
+    sessionAvgBpm = req.body.sessionAvgBpm;
+  }
 
   try {
+    const targetUserId = req.body.userId || records[0]?.userId;
+    if (sessionAvgBpm && sessionAvgBpm > 0 && targetUserId) {
+      await userModel.findByIdAndUpdate(targetUserId, { sessionAvgBpm: Math.round(sessionAvgBpm) });
+    }
+
     for (const record of records) {
       const { id, lastModifiedTime, startTime, endTime, samples, userId } = record;
 
       if (!id || !lastModifiedTime || !startTime || !endTime || !samples || !userId) {
-        return res.status(400).json({ success: false, message: 'Missing required details' });
+        continue;
       }
 
       // Upsert: update if exists, else create
@@ -39,6 +51,8 @@ export const getHeartRateStats = async (req, res) => {
 
     console.log('Fetching heart rate data for user:', userId);
 
+    const user = await userModel.findById(userId);
+
     // Get all heart rate data for the user, sorted by most recent
     const heartRateData = await HeartRate.find({
       user: userId
@@ -61,23 +75,38 @@ export const getHeartRateStats = async (req, res) => {
       });
     }
 
-    // Find the most recent heart rate sample
+    // Find the most recent heart rate sample and calculate average heart rate across latest session
     let latestHeartRate = 0;
     let latestTimestamp = null;
     let previousHeartRate = 0;
     let foundLatest = false;
     let foundPrevious = false;
+    let totalHeartRateSum = 0;
+    let totalSampleCount = 0;
+
+    const latestDateStr = heartRateData[0]?.startTime 
+      ? new Date(heartRateData[0].startTime).toDateString() 
+      : null;
 
     // Look through records starting from most recent
     for (const record of heartRateData) {
       if (record.samples && record.samples.length > 0) {
+        const recordDateStr = new Date(record.startTime).toDateString();
+        const isLatestSession = !latestDateStr || recordDateStr === latestDateStr;
+
         // Sort samples by timestamp (most recent first)
-        const sortedSamples = record.samples.sort((a, b) => 
+        const sortedSamples = [...record.samples].sort((a, b) => 
           new Date(b.time || b.timestamp) - new Date(a.time || a.timestamp)
         );
 
         for (const sample of sortedSamples) {
-          if (sample.beatsPerMinute) {
+          if (sample.beatsPerMinute && sample.beatsPerMinute > 0) {
+            // Only include in session average if it belongs to the latest session/date
+            if (isLatestSession) {
+              totalHeartRateSum += sample.beatsPerMinute;
+              totalSampleCount += 1;
+            }
+
             if (!foundLatest) {
               latestHeartRate = sample.beatsPerMinute;
               latestTimestamp = new Date(sample.time || sample.timestamp || record.endTime);
@@ -85,24 +114,26 @@ export const getHeartRateStats = async (req, res) => {
             } else if (!foundPrevious) {
               previousHeartRate = sample.beatsPerMinute;
               foundPrevious = true;
-              break;
             }
           }
         }
-        
-        if (foundLatest && foundPrevious) break;
       }
     }
 
-    console.log(`Latest heart rate: ${latestHeartRate}, Previous: ${previousHeartRate}`);
+    // Use user's synced sessionAvgBpm if set, otherwise calculate across latest session samples
+    const sessionAvgBpm = (user && user.sessionAvgBpm > 0) 
+      ? Math.round(user.sessionAvgBpm) 
+      : (totalSampleCount > 0 ? Math.round(totalHeartRateSum / totalSampleCount) : latestHeartRate);
+
+    console.log(`Latest heart rate: ${latestHeartRate}, Session Avg BPM: ${sessionAvgBpm}, Previous: ${previousHeartRate}`);
 
     // Calculate trend
     let trend = 'neutral';
     let trendValue = '0 bpm';
     let trendLabel = 'No trend data';
 
-    if (foundPrevious && latestHeartRate !== previousHeartRate) {
-      const difference = latestHeartRate - previousHeartRate;
+    if (foundPrevious && sessionAvgBpm !== previousHeartRate) {
+      const difference = sessionAvgBpm - previousHeartRate;
       if (difference > 0) {
         trend = 'up';
         trendValue = `+${difference} bpm`;
@@ -113,7 +144,7 @@ export const getHeartRateStats = async (req, res) => {
         trendLabel = 'Lower than previous reading';
       }
     } else if (foundLatest) {
-      trendLabel = 'Latest reading available';
+      trendLabel = 'Session average reading available';
     }
 
     if (!foundLatest) {
@@ -133,7 +164,7 @@ export const getHeartRateStats = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        latestHeartRate,
+        latestHeartRate: sessionAvgBpm,
         latestTimestamp,
         previousHeartRate,
         trend,

@@ -161,49 +161,114 @@ export default function Home() {
     setStepsData(steps);
     const totalStepsSum = steps.reduce((sum: number, s: any) => sum + (s.count || 0), 0);
     setTotalSteps(Math.floor(totalStepsSum));
-    if (heartRate.length > 0 && heartRate[0].samples.length > 0) {
-      setLatestHeartRate(heartRate[0].samples[0].beatsPerMinute);
+
+    // Calculate Average BPM during workout session
+    let calculatedAvgBpm = 0;
+    if (exerciseSession.length > 0) {
+      const sortedExercise = [...exerciseSession].sort(
+        (a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime()
+      );
+      const lastExercise = sortedExercise[0];
+
+      // 1. If Apple Health / Apple Watch directly stored the workout's average heart rate
+      if (lastExercise.averageHeartRate && lastExercise.averageHeartRate > 0) {
+        calculatedAvgBpm = Math.round(lastExercise.averageHeartRate);
+      } else {
+        // 2. Strict workout window calculation (excluding post-workout recovery heart rate drop)
+        const workoutStart = new Date(lastExercise.startTime).getTime();
+        const workoutEnd = new Date(lastExercise.endTime).getTime();
+
+        let workoutSum = 0;
+        let workoutCount = 0;
+
+        heartRate.forEach((record: any) => {
+          const recordStart = new Date(record.startTime).getTime();
+          const recordEnd = new Date(record.endTime || record.startTime).getTime();
+
+          if (recordStart >= workoutStart && recordEnd <= workoutEnd) {
+            if (record.samples && record.samples.length > 0) {
+              record.samples.forEach((s: any) => {
+                if (s.beatsPerMinute && s.beatsPerMinute > 0) {
+                  workoutSum += s.beatsPerMinute;
+                  workoutCount += 1;
+                }
+              });
+            }
+          }
+        });
+
+        if (workoutCount > 0) {
+          calculatedAvgBpm = Math.round(workoutSum / workoutCount);
+        }
+      }
     }
+
+    // Fallback: If no workout-specific samples found, average all available heart rate samples
+    if (calculatedAvgBpm === 0 && heartRate.length > 0) {
+      let totalSum = 0;
+      let totalCount = 0;
+      heartRate.forEach((record: any) => {
+        if (record.samples && record.samples.length > 0) {
+          record.samples.forEach((s: any) => {
+            if (s.beatsPerMinute && s.beatsPerMinute > 0) {
+              totalSum += s.beatsPerMinute;
+              totalCount += 1;
+            }
+          });
+        }
+      });
+      if (totalCount > 0) {
+        calculatedAvgBpm = Math.round(totalSum / totalCount);
+      } else if (heartRate[0]?.samples?.[0]?.beatsPerMinute) {
+        calculatedAvgBpm = Math.round(heartRate[0].samples[0].beatsPerMinute);
+      }
+    }
+
+    setLatestHeartRate(calculatedAvgBpm);
 
     if (sleep.length > 0) {
       setSleepDataRaw(sleep);
 
-      const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
-      const latestSleep = sortedSleep[0];
-
-      const start = new Date(latestSleep.startTime);
-      const end = new Date(latestSleep.endTime);
-
       const today = new Date();
-      const endedToday = end.getDate() === today.getDate() &&
-        end.getMonth() === today.getMonth() &&
-        end.getFullYear() === today.getFullYear();
+      let totalAsleepMs = 0;
 
-      if (endedToday) {
-        let asleepMs = latestSleep.asleepMs;
-        if (asleepMs === undefined || asleepMs === null) {
-          const sleepStages = latestSleep.stages || [];
-          asleepMs = 0;
-          sleepStages.forEach(s => {
-            if ([SleepStageType.LIGHT, SleepStageType.DEEP, SleepStageType.REM, SleepStageType.SLEEPING].includes(s.stage)) {
-              const sStart = new Date(s.startTime).getTime();
-              const sEnd = new Date(s.endTime).getTime();
-              asleepMs += (sEnd - sStart);
+      sleep.forEach(session => {
+        const end = new Date(session.endTime);
+        const endedToday = end.getDate() === today.getDate() &&
+          end.getMonth() === today.getMonth() &&
+          end.getFullYear() === today.getFullYear();
+
+        if (endedToday) {
+          let sessionAsleepMs = session.asleepMs;
+          if (sessionAsleepMs === undefined || sessionAsleepMs === null) {
+            const sleepStages = session.stages || [];
+            sessionAsleepMs = 0;
+            sleepStages.forEach(s => {
+              if ([SleepStageType.LIGHT, SleepStageType.DEEP, SleepStageType.REM, SleepStageType.SLEEPING].includes(s.stage)) {
+                const sStart = new Date(s.startTime).getTime();
+                const sEnd = new Date(s.endTime).getTime();
+                sessionAsleepMs += (sEnd - sStart);
+              }
+            });
+
+            if (sessionAsleepMs === 0) {
+              const start = new Date(session.startTime);
+              sessionAsleepMs = end.getTime() - start.getTime();
             }
-          });
-
-          // Fallback to total duration if no asleep stages were found
-          if (asleepMs === 0) {
-            asleepMs = end.getTime() - start.getTime();
           }
+          totalAsleepMs += sessionAsleepMs;
         }
+      });
 
-        const totalMinutes = Math.ceil(asleepMs / (1000 * 60));
+      if (totalAsleepMs > 0) {
+        const totalMinutes = Math.round(totalAsleepMs / (1000 * 60));
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
         const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+        console.log(`[HOME SLEEP DEBUG] totalAsleepMs: ${totalAsleepMs}, totalMinutes: ${totalMinutes}, formattedSleep: ${formattedSleep}`);
         setTotalSleepHours(formattedSleep);
       } else {
+        console.log('[HOME SLEEP DEBUG] totalAsleepMs is 0');
         setTotalSleepHours("0 hours and 0 minutes");
       }
     } else {
@@ -293,7 +358,7 @@ export default function Home() {
     { label: exerSession, value: exerType, unit: '', icon: 'barbell-outline', color: '#ff8c42' },
     { label: 'Total Steps Today', value: totalSteps, unit: '', icon: 'walk-outline', color: '#43e97b' },
     { label: 'Hours of Sleep', value: totalSleepHours, unit: '', icon: 'moon-outline', color: '#5d3fd3' },
-    { label: 'Latest Heart Rate', value: latestHeartRate, unit: 'bpm', icon: 'heart-outline', color: '#ff4d6d' },
+    { label: 'Session Avg BPM', value: latestHeartRate, unit: 'bpm', icon: 'heart-outline', color: '#ff4d6d' },
   ];
 
   return (
@@ -403,7 +468,7 @@ export default function Home() {
                 }
                 try {
                   Toast.show({ type: 'info', text1: 'Syncing...', text2: 'Please wait' });
-                  await syncToDB(heartRateData, sleepDataRaw, stepsData, userData.user_id);
+                  await syncToDB(heartRateData, sleepDataRaw, stepsData, userData.user_id, latestHeartRate);
                   Toast.show({ type: 'success', text1: 'Sync Successful', text2: 'Health data saved to database!' });
                 } catch (error) {
                   Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message });

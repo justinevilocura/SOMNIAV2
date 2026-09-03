@@ -18,23 +18,56 @@ export const useExerciseSession = (date: Date) => {
         type: 'Workout' as HealthObserver,
       };
 
-      AppleHealthKit.getSamples(options, (err, results) => {
-        if (err) {
-          console.warn('Error fetching workouts from HealthKit:', err);
-          resolve([]);
+      AppleHealthKit.getAnchoredWorkouts(options, (err, results: any) => {
+        if (err || !results) {
+          // Fallback to getSamples if getAnchoredWorkouts fails
+          AppleHealthKit.getSamples(options, (samplesErr, samplesResults) => {
+            if (samplesErr) {
+              console.warn('Error fetching workouts from HealthKit:', samplesErr);
+              resolve([]);
+            } else {
+              const workoutResults = (samplesResults || []) as any[];
+              const mapped = workoutResults.map(w => ({
+                metadata: {
+                  id: w.id || `workout_${w.start || w.startDate}`,
+                  lastModifiedTime: w.end || w.endDate || w.start || w.startDate,
+                },
+                startTime: w.start || w.startDate,
+                endTime: w.end || w.endDate,
+                exerciseType: mapAppleWorkoutTypeToHC(w.workoutActivityType || w.activityName || 'other'),
+                activityName: w.workoutActivityType || w.activityName || 'Other',
+              }));
+              resolve(mapped);
+            }
+          });
         } else {
-          // Map Apple Health workouts to Health Connect ExerciseSession format
-          const workoutResults = results as any[];
-          const mapped = workoutResults.map(w => ({
-            metadata: {
-              id: w.id || `workout_${w.start || w.startDate}`,
-              lastModifiedTime: w.end || w.endDate || w.start || w.startDate,
-            },
-            startTime: w.start || w.startDate,
-            endTime: w.end || w.endDate,
-            exerciseType: mapAppleWorkoutTypeToHC(w.workoutActivityType || w.activityName || 'other'),
-            activityName: w.workoutActivityType || w.activityName || 'Other',
-          }));
+          // getAnchoredWorkouts returns { data: [...] } or array directly
+          const workoutList = (Array.isArray(results) ? results : (results.data || [])) as any[];
+          const mapped = workoutList.map(w => {
+            let avgHr = 0;
+            if (w.metadata) {
+              const metaVal = w.metadata.HKAverageHeartRate || w.metadata.HKMetadataKeyAverageHeartRate;
+              if (metaVal) {
+                const match = String(metaVal).match(/(\d+(\.\d+)?)/);
+                if (match) avgHr = Math.round(parseFloat(match[1]));
+              }
+            }
+            if (!avgHr && w.averageHeartRate) {
+              avgHr = Math.round(w.averageHeartRate);
+            }
+
+            return {
+              metadata: {
+                id: w.id || `workout_${w.start || w.startDate}`,
+                lastModifiedTime: w.end || w.endDate || w.start || w.startDate,
+              },
+              startTime: w.start || w.startDate,
+              endTime: w.end || w.endDate,
+              exerciseType: mapAppleWorkoutTypeToHC(w.workoutActivityType || w.activityName || 'other'),
+              activityName: w.workoutActivityType || w.activityName || 'Other',
+              averageHeartRate: avgHr > 0 ? avgHr : undefined,
+            };
+          });
           resolve(mapped);
         }
       });

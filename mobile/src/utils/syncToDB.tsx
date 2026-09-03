@@ -39,7 +39,8 @@ export const syncToDB = async (
     heartRate: any[],
     sleepSession: any[],
     steps: any[],
-    userID: string
+    userID: string,
+    sessionAvgBpm?: number
 ) => {
     try {
         const token = await getAuthToken();
@@ -49,17 +50,23 @@ export const syncToDB = async (
         };
 
         // Heart Rate
-        const heartRatePayload = heartRate.map((record) => ({
+        const records = heartRate.map((record) => ({
             userId: userID,
             id: record.metadata.id,
             lastModifiedTime: record.metadata.lastModifiedTime,
             startTime: record.startTime,
             endTime: record.endTime,
-            samples: record.samples.map((s) => ({
+            samples: record.samples.map((s: any) => ({
                 beatsPerMinute: s.beatsPerMinute,
                 time: s.time,
             })),
         }));
+
+        const heartRatePayload = {
+            userId: userID,
+            sessionAvgBpm: sessionAvgBpm || null,
+            records,
+        };
 
         const heartRateResponse = await fetch(`${backendUrl}/api/heartRate/addHeartRate`, {
             method: "POST",

@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
     },
     sleepGoalBedtime: { type: String, default: '22:30' },
     sleepGoalDuration: { type: Number, default: 8 },
+    sessionAvgBpm: { type: Number, default: 0 },
 });
 
 

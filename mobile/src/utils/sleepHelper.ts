@@ -1,7 +1,20 @@
 import { mapAppleSleepStageToHC } from './healthCompatibility';
 
 const calculateAsleepDuration = (group: any[]): number => {
-  const asleepSamples = group.filter(s => ['CORE', 'DEEP', 'REM', 'ASLEEP'].includes(s.value));
+  const hasDetailedStages = group.some(s => s && ['CORE', 'DEEP', 'REM'].includes(s.value));
+
+  let asleepSamples: any[];
+  if (hasDetailedStages) {
+    // Apple Health defines Time Asleep strictly as the sum of CORE, DEEP, and REM stages
+    asleepSamples = group.filter(s => s && ['CORE', 'DEEP', 'REM'].includes(s.value));
+  } else {
+    // Fallback for devices without stage analysis
+    asleepSamples = group.filter(s => s && s.value !== 'AWAKE' && s.value !== 'INBED');
+    if (asleepSamples.length === 0) {
+      asleepSamples = group.filter(s => s && s.value !== 'AWAKE');
+    }
+  }
+
   if (asleepSamples.length === 0) return 0;
 
   const intervals = asleepSamples.map(s => ({
@@ -28,6 +41,7 @@ const calculateAsleepDuration = (group: any[]): number => {
     totalMs += (interval.end - interval.start);
   });
 
+  console.log(`[SLEEP HELPER DEBUG] samplesCount: ${group.length}, asleepSamples: ${asleepSamples.length}, totalMs: ${totalMs}, totalMinutes: ${Math.round(totalMs / 60000)}`);
   return totalMs;
 };
 
