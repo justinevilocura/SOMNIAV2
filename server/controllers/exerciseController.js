@@ -2,32 +2,81 @@ import ExerciseSession from '../models/exerciseModel.js';
 
 export const addExerciseSession = async (req, res) => {
     const { exerciseType, lastModifiedTime, id, title, startTime, endTime } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id || req.body?.userId;
 
-    if (exerciseType === undefined || !lastModifiedTime || !id || !startTime || !endTime) {
+    if (exerciseType === undefined || !lastModifiedTime || !id || !startTime || !endTime || !userId) {
         return res.status(400).json({ success: false, message: 'Missing required details' });
     }
 
     try {
-        const existingExercise = await ExerciseSession.findOne({ id });
-
-        if (existingExercise) {
-            return res.status(400).json({ success: false, message: "Exercise session with this ID already exists" });
-        }
-
-        const exerciseData = new ExerciseSession({
-            user: userId,
-            exerciseType,
-            lastModifiedTime: new Date(lastModifiedTime),
-            id,
-            title: title || null,
-            startTime: new Date(startTime),
-            endTime: new Date(endTime)
-        });
-
-        await exerciseData.save();
+        await ExerciseSession.findOneAndUpdate(
+            { id },
+            {
+                user: userId,
+                exerciseType,
+                lastModifiedTime: new Date(lastModifiedTime),
+                id,
+                title: title || null,
+                startTime: new Date(startTime),
+                endTime: new Date(endTime)
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
 
         return res.status(201).json({ success: true, message: "Exercise session added successfully" });
+
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const bulkAddExerciseSessions = async (req, res) => {
+    const { exerciseRecords } = req.body;
+    const userId = req.user?.id || req.body?.userId;
+
+    if (!exerciseRecords || !Array.isArray(exerciseRecords) || exerciseRecords.length === 0) {
+        return res.status(400).json({ success: false, message: 'Exercise records array is required' });
+    }
+
+    try {
+        let insertedCount = 0;
+        const skippedRecords = [];
+
+        for (const record of exerciseRecords) {
+            const { exerciseType, lastModifiedTime, id, title, startTime, endTime, userId: recordUserId } = record;
+            const targetUserId = recordUserId || userId;
+
+            if (exerciseType === undefined || !lastModifiedTime || !id || !startTime || !endTime || !targetUserId) {
+                skippedRecords.push({ id: id || 'unknown', reason: 'Missing required fields' });
+                continue;
+            }
+
+            await ExerciseSession.findOneAndUpdate(
+                { id },
+                {
+                    user: targetUserId,
+                    exerciseType,
+                    lastModifiedTime: new Date(lastModifiedTime),
+                    id,
+                    title: title || null,
+                    startTime: new Date(startTime),
+                    endTime: new Date(endTime)
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+
+            insertedCount++;
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: `Bulk operation completed`,
+            data: {
+                inserted: insertedCount,
+                skipped: skippedRecords.length,
+                skippedRecords: skippedRecords
+            }
+        });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -246,62 +295,4 @@ export const getExerciseStats = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
-};
-
-export const bulkAddExerciseSessions = async (req, res) => {
-    const { exerciseRecords } = req.body;
-    const userId = req.user.id;
-
-    if (!exerciseRecords || !Array.isArray(exerciseRecords) || exerciseRecords.length === 0) {
-        return res.status(400).json({ success: false, message: 'Exercise records array is required' });
-    }
-
-    try {
-        const processedRecords = [];
-        const skippedRecords = [];
-
-        for (const record of exerciseRecords) {
-            const { exerciseType, lastModifiedTime, id, title, startTime, endTime } = record;
-
-            if (exerciseType === undefined || !lastModifiedTime || !id || !startTime || !endTime) {
-                skippedRecords.push({ id: id || 'unknown', reason: 'Missing required fields' });
-                continue;
-            }
-
-            const existingRecord = await ExerciseSession.findOne({ id });
-            if (existingRecord) {
-                skippedRecords.push({ id, reason: 'Record already exists' });
-                continue;
-            }
-
-            processedRecords.push({
-                user: userId,
-                exerciseType,
-                lastModifiedTime: new Date(lastModifiedTime),
-                id,
-                title: title || null,
-                startTime: new Date(startTime),
-                endTime: new Date(endTime)
-            });
-        }
-
-        let insertedCount = 0;
-        if (processedRecords.length > 0) {
-            const result = await ExerciseSession.insertMany(processedRecords);
-            insertedCount = result.length;
-        }
-
-        return res.status(201).json({
-            success: true,
-            message: `Bulk operation completed`,
-            data: {
-                inserted: insertedCount,
-                skipped: skippedRecords.length,
-                skippedRecords: skippedRecords
-            }
-        });
-
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
-};
+};

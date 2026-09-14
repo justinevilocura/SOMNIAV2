@@ -109,13 +109,25 @@ export const getHeartRateStats = async (req, res) => {
         latestHeartRate = Math.floor(sum / sessionSamples.length);
         latestTimestamp = new Date(sessionSamples[0].time || sessionSamples[0].timestamp);
       } else {
-        // Fallback to absolute latest
-        latestHeartRate = sortedSamples[0].beatsPerMinute || 0;
+        // Fallback: average the latest reading record's samples if available, otherwise latest sample
+        const latestRecordSamples = heartRateData[0]?.samples || [];
+        if (latestRecordSamples.length > 0) {
+          const sum = latestRecordSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+          latestHeartRate = Math.floor(sum / latestRecordSamples.length);
+        } else {
+          latestHeartRate = sortedSamples[0].beatsPerMinute || 0;
+        }
         latestTimestamp = new Date(sortedSamples[0].time || sortedSamples[0].timestamp || sortedSamples[0].parentEndTime);
       }
     } else if (sortedSamples.length > 0) {
-      // Fallback
-      latestHeartRate = sortedSamples[0].beatsPerMinute || 0;
+      // Fallback: average the latest reading record's samples if available, otherwise latest sample
+      const latestRecordSamples = heartRateData[0]?.samples || [];
+      if (latestRecordSamples.length > 0) {
+        const sum = latestRecordSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+        latestHeartRate = Math.floor(sum / latestRecordSamples.length);
+      } else {
+        latestHeartRate = sortedSamples[0].beatsPerMinute || 0;
+      }
       latestTimestamp = new Date(sortedSamples[0].time || sortedSamples[0].timestamp || sortedSamples[0].parentEndTime);
     }
 

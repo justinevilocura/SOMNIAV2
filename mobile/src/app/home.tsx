@@ -33,10 +33,10 @@ export default function Home() {
   const [sleepDataRaw, setSleepDataRaw] = useState([]);
   const [stepsData, setStepsData] = useState([]);
   const [exerciseDataRaw, setExerciseDataRaw] = useState([]);
-  const [exerSession, setExerSession] = useState("");
-  const [exerType, setExerType] = useState("");
+  const [exerSession, setExerSession] = useState("No recent exercise");
+  const [exerType, setExerType] = useState("None");
   const [latestHeartRate, setLatestHeartRate] = useState(0);
-  const [totalSleepHours, setTotalSleepHours] = useState("");
+  const [totalSleepHours, setTotalSleepHours] = useState("0 hours and 0 minutes");
   const [totalSteps, setTotalSteps] = useState(0);
   const [sleepData, setSleepData] = useState({
     labels: [],
@@ -52,10 +52,12 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const fetchHealthData = async () => {
+  const fetchHealthData = async (shouldSync = false) => {
+    let currentUserId = userData.user_id;
     const authDataString = await AsyncStorage.getItem('authData');
     if (authDataString) {
       const authData = JSON.parse(authDataString);
+      currentUserId = authData.user_id || currentUserId;
       setUserData({
         name: authData.name || 'User',
         email: authData.email || '',
@@ -64,10 +66,11 @@ export default function Home() {
     }
 
     let isInitialized = false;
-    let steps = [];
-    let heartRate = [];
-    let sleep = [];
-    let exerciseSession = [];
+    let steps: any[] = [];
+    let heartRate: any[] = [];
+    let sleep: any[] = [];
+    let exerciseSession: any[] = [];
+    let selectedSteps: any[] = [];
 
     try {
       isInitialized = await initialize();
@@ -142,7 +145,7 @@ export default function Home() {
       });
 
       const sources = Object.keys(stepsBySource);
-      let selectedSteps: typeof steps = [];
+      selectedSteps = [];
       
       // Prioritize Xiaomi/Mi Fitness, then Samsung Health, then whichever has the highest sum
       const xiaomiSource = sources.find(s => s.toLowerCase().includes('xiaomi') || s.toLowerCase().includes('mi'));
@@ -294,17 +297,31 @@ export default function Home() {
     } else {
       setLatestHeartRate(0);
     }
-  };
 
-  useEffect(() => {
-    fetchHealthData();
-  }, []);
+    if (shouldSync && currentUserId) {
+      try {
+        Toast.show({ type: 'info', text1: 'Syncing to database...', text2: 'Saving health data' });
+        await syncToDB(heartRate, sleep, selectedSteps, exerciseSession, currentUserId);
+        Toast.show({ type: 'success', text1: 'Sync Successful', text2: 'Health data saved to database!' });
+      } catch (error: any) {
+        Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message || 'Failed to sync' });
+      }
+    }
+
+    return { heartRate, sleep, steps: selectedSteps, exerciseSession };
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    setRefreshKey(prevKey => prevKey + 1);
-    await fetchHealthData();
-    setRefreshing(false);
+    try {
+      setRefreshKey(prevKey => prevKey + 1);
+      Toast.show({ type: 'info', text1: 'Fetching data...', text2: 'Reading from Mi Fitness / Health Connect' });
+      await fetchHealthData(true);
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Refresh Failed', text2: error.message || 'Error refreshing data' });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const params = useLocalSearchParams();
@@ -415,6 +432,14 @@ export default function Home() {
               </ScrollView>
             )}
 
+            {totalSteps === 0 && latestHeartRate === 0 && exerType === "None" && (
+              <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
+                <Text style={{ color: '#a29bfe', fontSize: 13, textAlign: 'center', fontStyle: 'italic' }}>
+                  ↓ Pull down to fetch your Mi Fitness data and sync to Somnia
+                </Text>
+              </View>
+            )}
+
             <View style={styles.statsBoxContainer}>
               {statBoxes.map((box, idx) => {
                 if (box.label === 'Session Avg BPM') {
@@ -447,15 +472,10 @@ export default function Home() {
             <TouchableOpacity
               style={styles.syncButton}
               onPress={async () => {
-                if (!userData.user_id) {
-                  Toast.show({ type: 'error', text1: 'Sync Failed', text2: 'No user ID found!' });
-                  return;
-                }
                 try {
-                  Toast.show({ type: 'info', text1: 'Syncing...', text2: 'Please wait' });
-                  await syncToDB(heartRateData, sleepDataRaw, stepsData, exerciseDataRaw, userData.user_id);
-                  Toast.show({ type: 'success', text1: 'Sync Successful', text2: 'Health data saved to database!' });
-                } catch (error) {
+                  Toast.show({ type: 'info', text1: 'Fetching & Syncing...', text2: 'Please wait' });
+                  await fetchHealthData(true);
+                } catch (error: any) {
                   Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message });
                 }
               }}>
