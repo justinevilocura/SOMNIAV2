@@ -2,7 +2,12 @@ import jwt from "jsonwebtoken";
 
 const userAuth = async (req, res, next) => {
   try {
-    const { token } = req.cookies;
+    let token = req.cookies.token;
+
+    // Fallback for mobile app requests which use Authorization header
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
 
     if (!token) {
       res.clearCookie('token', {
@@ -35,6 +40,7 @@ const userAuth = async (req, res, next) => {
 
       req.body = req.body || {};
       req.body.userId = tokenDecode.id;
+      req.user = { id: tokenDecode.id };
       next();
     } catch (error) {
       res.clearCookie('token', {

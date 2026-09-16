@@ -12,6 +12,7 @@ import heartRateRouter from "./routes/heartRateRoutes.js";
 import sleepSessionRouter from "./routes/sleepSessionRoutes.js";
 import spo2Router from "./routes/spo2Routes.js";
 import aiRouter from "./routes/aiRoutes.js";
+import exerciseRouter from "./routes/exerciseRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 4000
@@ -28,6 +29,7 @@ const allowedOrigins = [
     'exp://127.0.0.1:19000',         // Expo mobile local dev (iOS/Android)
     'http://192.168.254.142:4000',
     'http://192.168.1.61:4000',
+    'http://172.20.10.2:4000',
     'https://somnia-17eu.onrender.com',
     'https://somnia-api-iuvq.onrender.com',  // Replace with your LAN IP if using physical device
 ];
@@ -51,8 +53,8 @@ app.use(cors({
 }));
 
 // Other middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
 //API Endpoints
@@ -64,6 +66,20 @@ app.use('/api/heartRate', heartRateRouter);
 app.use('/api/sleepSession', sleepSessionRouter);
 app.use('/api/spo2', spo2Router);
 app.use('/api/ai', aiRouter);
+app.use('/api/exercise', exerciseRouter);
+
+// Global Error Handler to catch middleware errors (like PayloadTooLargeError from express.json)
+app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
+    }
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ success: false, message: 'Payload too large. Please reduce the date range for syncing.' });
+    }
+    console.error('Server error:', err);
+    res.status(err.status || 500).json({ success: false, message: err.message || 'Internal Server Error' });
+});
 
 app.listen(port, () => console.log(`Server started on PORT:${port}`));
+
 

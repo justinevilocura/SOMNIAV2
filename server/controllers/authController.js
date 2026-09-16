@@ -4,7 +4,7 @@ import userModel from '../models/userModel.js';
 import transporter from '../config/nodemailer.js';
 
 export const register = async (req, res) => {
-    const { name, email, password, birthdate, gender  } = req.body;
+    const { name, email, password, birthdate, gender } = req.body;
 
     if (!name || !email || !password || !birthdate || !gender) {
         return res.status(400).json({ success: false, message: 'Missing required details' });
@@ -14,8 +14,8 @@ export const register = async (req, res) => {
     const allowedGenders = ["Male", "Female", "Prefer not to say"];
     if (!allowedGenders.includes(gender)) {
         return res.status(400).json({
-        success: false,
-        message: "Invalid gender value",
+            success: false,
+            message: "Invalid gender value",
         });
     }
 
@@ -31,13 +31,13 @@ export const register = async (req, res) => {
             name,
             email,
             password: hashedPassword,
-            birthdate: new Date(birthdate)  ,
+            birthdate: new Date(birthdate),
             gender
         });
         await user.save();
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        
+
         /*
         res.cookie('token', token, {
             httpOnly: true,
@@ -46,24 +46,29 @@ export const register = async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
         */
-       
+
         res.cookie('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
-        
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
-            to: email,
-            subject: 'Welcome to SOMNiA',
-            text: `Welcome to SOMNiA webiste. Your account has been 
-            created with email id: ${email}`,
-        }
 
-        
-        await transporter.sendMail(mailOptions);
+        try {
+            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+                const mailOptions = {
+                    from: process.env.SENDER_EMAIL || email,
+                    to: email,
+                    subject: 'Welcome to SOMNiA',
+                    text: `Welcome to SOMNiA. Your account has been created with email: ${email}`,
+                };
+                await transporter.sendMail(mailOptions);
+            } else {
+                console.warn('SMTP credentials not configured. Skipping welcome email.');
+            }
+        } catch (mailError) {
+            console.error('Failed to send welcome email:', mailError.message);
+        }
 
         return res.status(201).json({ success: true, message: "User registered successfully" });
 
@@ -94,7 +99,7 @@ export const login = async (req, res) => {
         }
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        
+
         /*
         res.cookie('token', token, {
             httpOnly: true,
@@ -110,8 +115,8 @@ export const login = async (req, res) => {
             sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
-        
-        return res.status(200).json({ success: true, message: "Login successful", token, user_id: user._id});
+
+        return res.status(200).json({ success: true, message: "Login successful", token, user_id: user._id });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -132,7 +137,7 @@ export const logout = async (req, res) => {
 
         // Force clear session
         req.session = null;
-        
+
         return res.status(200).json({ success: true, message: 'Logged Out!' });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -151,7 +156,7 @@ export const sendVerifyOtp = async (req, res) => {
         const otp = String(Math.floor(100000 + Math.random() * 900000));
 
         user.verifyOtp = otp;
-        user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;  
+        user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
         await user.save();
 
         const mailOptions = {
@@ -171,26 +176,26 @@ export const sendVerifyOtp = async (req, res) => {
 };
 
 
-export const verifyEmail = async(req,res) =>{
-    const {userId, otp} = req.body;
+export const verifyEmail = async (req, res) => {
+    const { userId, otp } = req.body;
 
-    if(!userId || !otp){
-        res.json({success:false, message: "Missing Details"});
+    if (!userId || !otp) {
+        res.json({ success: false, message: "Missing Details" });
     }
 
     try {
         const user = await userModel.findById(userId);
 
-        if(!user){
-            return res.json({success:false, message: "User not found."});
+        if (!user) {
+            return res.json({ success: false, message: "User not found." });
         }
 
-        if(user.verifyOtp === '' || user.verifyOtp !== otp){
-            return res.json({success:false, message: "Invalid OTP."});
+        if (user.verifyOtp === '' || user.verifyOtp !== otp) {
+            return res.json({ success: false, message: "Invalid OTP." });
         }
 
-        if(user.verifyOtpExpireAt < Date.now()){
-            return res.json({success: false, message: 'OTP Expired'});
+        if (user.verifyOtpExpireAt < Date.now()) {
+            return res.json({ success: false, message: 'OTP Expired' });
         }
 
         user.isAccountVerified = true;
@@ -198,14 +203,14 @@ export const verifyEmail = async(req,res) =>{
         user.verifyOtpExprieAt = 0;
 
         await user.save()
-        res.json({success: true, message: "Email verified successfully"});
+        res.json({ success: true, message: "Email verified successfully" });
     } catch (error) {
-        res.json({success:false, message:  error.message});
+        res.json({ success: false, message: error.message });
 
     }
 }
 
-export const isAuthenticated = async(req,res)=>{
+export const isAuthenticated = async (req, res) => {
     try {
         res.json({ success: true });
 
@@ -216,37 +221,37 @@ export const isAuthenticated = async(req,res)=>{
 }
 
 
-export const sendResetOtp = async(req,res)=>{
-    const {email} = req.body;
+export const sendResetOtp = async (req, res) => {
+    const { email } = req.body;
 
-    if(!email){
-        return res.json({success:false, message: "Email is required"});
+    if (!email) {
+        return res.json({ success: false, message: "Email is required" });
     }
 
-    
-    
+
+
     try {
-        const user = await userModel.findOne({email});
-        
-        if(!user){
-            res.json({success: false, message: "User not found!"});
+        const user = await userModel.findOne({ email });
+
+        if (!user) {
+            res.json({ success: false, message: "User not found!" });
         }
 
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    user.resetOtp = otp;
-    user.resetOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;  
-    await user.save();
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        user.resetOtp = otp;
+        user.resetOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+        await user.save();
 
-    const mailOptions = {
-        from: process.env.SENDER_EMAIL,
-        to: user.email,
-        subject: 'Password Reset OTP.',
-        text: `Your OTP for resetting your password is ${otp} 
+        const mailOptions = {
+            from: process.env.SENDER_EMAIL,
+            to: user.email,
+            subject: 'Password Reset OTP.',
+            text: `Your OTP for resetting your password is ${otp} 
         Use this OTP to proceed with resetting your password.`
-    };
+        };
 
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true, message: "Otp sent to your email" });
+        await transporter.sendMail(mailOptions);
+        res.json({ success: true, message: "Otp sent to your email" });
 
     } catch (error) {
         res.json({ success: false, message: error.message });
@@ -254,25 +259,25 @@ export const sendResetOtp = async(req,res)=>{
     }
 }
 
-export const resetPassword = async (req,res) =>{
-    const {email, otp, newPassword} = req.body;
+export const resetPassword = async (req, res) => {
+    const { email, otp, newPassword } = req.body;
 
-    if(!email || !otp || !newPassword){
-        return res.json({success:false,message:'Email, OTP, and new password are required'})
+    if (!email || !otp || !newPassword) {
+        return res.json({ success: false, message: 'Email, OTP, and new password are required' })
     }
 
     try {
-        const user = await userModel.findOne({email});
-        if(!user){
-            return res.json({success:false, message: "User not found."});
+        const user = await userModel.findOne({ email });
+        if (!user) {
+            return res.json({ success: false, message: "User not found." });
         }
 
-        if(user.resetOtp === "" || user.resetOtp !== otp){
-            return res.json({sucess:false, message: "Invalid OTP"});
+        if (user.resetOtp === "" || user.resetOtp !== otp) {
+            return res.json({ sucess: false, message: "Invalid OTP" });
         }
 
-        if(user.resetOtpExpireAt < Date.now()){
-            return res.json({sucess:false, message: "OTP Expired"});
+        if (user.resetOtpExpireAt < Date.now()) {
+            return res.json({ sucess: false, message: "OTP Expired" });
         }
 
         const hashPassword = await bcrypt.hash(newPassword, 10);
@@ -282,8 +287,8 @@ export const resetPassword = async (req,res) =>{
 
         await user.save();
 
-        return res.json({success:true, message: "Password has been reset successfully"});
+        return res.json({ success: true, message: "Password has been reset successfully" });
     } catch (error) {
-        return res.json({success: false, message: error.message});
+        return res.json({ success: false, message: error.message });
     }
 }

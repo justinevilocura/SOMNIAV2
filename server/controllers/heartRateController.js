@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import HeartRate from '../models/heartRateModel.js';
 
 export const addHeartRate = async (req, res) => {
@@ -61,37 +62,78 @@ export const getHeartRateStats = async (req, res) => {
       });
     }
 
-    // Find the most recent heart rate sample
+    // --- REPLICATE MOBILE APP SESSION AVERAGE LOGIC ---
+    // 1. Get latest Exercise Session
+    const latestExercise = await mongoose.model('ExerciseSession').findOne({ user: userId }).sort({ endTime: -1 });
+    
+    // 2. Get latest Sleep Session
+    const latestSleep = await mongoose.model('SleepSession').findOne({ user: userId }).sort({ endTime: -1 });
+
+    let mostRecentSession = null;
+    if (latestExercise && latestSleep) {
+      if (new Date(latestExercise.endTime).getTime() > new Date(latestSleep.endTime).getTime()) {
+        mostRecentSession = latestExercise;
+      } else {
+        mostRecentSession = latestSleep;
+      }
+    } else if (latestExercise) {
+      mostRecentSession = latestExercise;
+    } else if (latestSleep) {
+      mostRecentSession = latestSleep;
+    }
+
     let latestHeartRate = 0;
     let latestTimestamp = null;
     let previousHeartRate = 0;
-    let foundLatest = false;
-    let foundPrevious = false;
 
-    // Look through records starting from most recent
-    for (const record of heartRateData) {
-      if (record.samples && record.samples.length > 0) {
-        // Sort samples by timestamp (most recent first)
-        const sortedSamples = record.samples.sort((a, b) => 
-          new Date(b.time || b.timestamp) - new Date(a.time || a.timestamp)
-        );
+    const allSamples = heartRateData.flatMap(record => 
+      (record.samples || []).map(s => ({ ...s.toObject(), parentEndTime: record.endTime }))
+    );
 
-        for (const sample of sortedSamples) {
-          if (sample.beatsPerMinute) {
-            if (!foundLatest) {
-              latestHeartRate = sample.beatsPerMinute;
-              latestTimestamp = new Date(sample.time || sample.timestamp || record.endTime);
-              foundLatest = true;
-            } else if (!foundPrevious) {
-              previousHeartRate = sample.beatsPerMinute;
-              foundPrevious = true;
-              break;
-            }
-          }
+    // Sort all samples descending
+    const sortedSamples = allSamples.sort((a, b) => 
+      new Date(b.time || b.timestamp).getTime() - new Date(a.time || a.timestamp).getTime()
+    );
+
+    if (mostRecentSession && sortedSamples.length > 0) {
+      const sessionStart = new Date(mostRecentSession.startTime).getTime();
+      const sessionEnd = new Date(mostRecentSession.endTime).getTime();
+      
+      const sessionSamples = sortedSamples.filter(sample => {
+        const time = new Date(sample.time || sample.timestamp).getTime();
+        return time >= sessionStart && time <= sessionEnd;
+      });
+
+      if (sessionSamples.length > 0) {
+        const sum = sessionSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+        latestHeartRate = Math.floor(sum / sessionSamples.length);
+        latestTimestamp = new Date(sessionSamples[0].time || sessionSamples[0].timestamp);
+      } else {
+        // Fallback: average the latest reading record's samples if available, otherwise latest sample
+        const latestRecordSamples = heartRateData[0]?.samples || [];
+        if (latestRecordSamples.length > 0) {
+          const sum = latestRecordSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+          latestHeartRate = Math.floor(sum / latestRecordSamples.length);
+        } else {
+          latestHeartRate = sortedSamples[0].beatsPerMinute || 0;
         }
-        
-        if (foundLatest && foundPrevious) break;
+        latestTimestamp = new Date(sortedSamples[0].time || sortedSamples[0].timestamp || sortedSamples[0].parentEndTime);
       }
+    } else if (sortedSamples.length > 0) {
+      // Fallback: average the latest reading record's samples if available, otherwise latest sample
+      const latestRecordSamples = heartRateData[0]?.samples || [];
+      if (latestRecordSamples.length > 0) {
+        const sum = latestRecordSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+        latestHeartRate = Math.floor(sum / latestRecordSamples.length);
+      } else {
+        latestHeartRate = sortedSamples[0].beatsPerMinute || 0;
+      }
+      latestTimestamp = new Date(sortedSamples[0].time || sortedSamples[0].timestamp || sortedSamples[0].parentEndTime);
+    }
+
+    // Previous logic for trend (simplified)
+    if (sortedSamples.length > 1) {
+      previousHeartRate = sortedSamples[1].beatsPerMinute || 0;
     }
 
     console.log(`Latest heart rate: ${latestHeartRate}, Previous: ${previousHeartRate}`);
@@ -101,7 +143,7 @@ export const getHeartRateStats = async (req, res) => {
     let trendValue = '0 bpm';
     let trendLabel = 'No trend data';
 
-    if (foundPrevious && latestHeartRate !== previousHeartRate) {
+    if (previousHeartRate && latestHeartRate !== previousHeartRate) {
       const difference = latestHeartRate - previousHeartRate;
       if (difference > 0) {
         trend = 'up';
@@ -112,22 +154,8 @@ export const getHeartRateStats = async (req, res) => {
         trendValue = `${Math.abs(difference)} bpm`;
         trendLabel = 'Lower than previous reading';
       }
-    } else if (foundLatest) {
+    } else if (latestHeartRate > 0) {
       trendLabel = 'Latest reading available';
-    }
-
-    if (!foundLatest) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          latestHeartRate: 0,
-          latestTimestamp: null,
-          sampleCount: 0,
-          trend: 'neutral',
-          trendValue: '0 bpm',
-          trendLabel: 'No valid heart rate samples found'
-        }
-      });
     }
 
     return res.status(200).json({
