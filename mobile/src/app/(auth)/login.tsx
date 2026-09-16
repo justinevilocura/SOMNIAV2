@@ -17,8 +17,8 @@ export default function Login() {
 
     const router = useRouter();
 
-    // Use localhost for web development
-    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.50.77.201:4000';
+    // Production Render backend with env override
+    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2.onrender.com';
 
     const handleLogin = async () => {
         setIsLoading(true);
