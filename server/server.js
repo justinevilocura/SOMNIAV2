@@ -31,7 +31,8 @@ const allowedOrigins = [
     'http://192.168.1.61:4000',
     'http://172.20.10.2:4000',
     'https://somnia-17eu.onrender.com',
-    'https://somnia-api-iuvq.onrender.com',  // Replace with your LAN IP if using physical device
+    'https://somnia-api-iuvq.onrender.com',
+    'https://somniav2.onrender.com',
 ];
 
 
