@@ -109,10 +109,12 @@ export const login = async (req, res) => {
         });
         */
 
+        const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || (req.headers.origin && req.headers.origin.includes('vercel.app'));
+
         res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
+            secure: isProd,
+            sameSite: isProd ? 'None' : 'Strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -126,11 +128,13 @@ export const login = async (req, res) => {
 
 export const logout = async (req, res) => {
     try {
+        const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || (req.headers.origin && req.headers.origin.includes('vercel.app'));
+
         // Clear the token cookie with all necessary options
         res.clearCookie('token', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
+            secure: isProd,
+            sameSite: isProd ? 'None' : 'Strict',
             path: '/',
             expires: new Date(0)
         });

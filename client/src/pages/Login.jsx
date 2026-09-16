@@ -43,6 +43,10 @@ const Login = () => {
       );
 
       if (data.success) {
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+        }
         await checkAuthAndGetUserData();
         toast.success('Login successful!');
         navigate('/dashboard');

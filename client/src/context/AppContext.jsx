@@ -91,7 +91,8 @@ export const AppContextProvider = (props) => {
       if (data.success) {
         setIsLoggedin(false);
         setUserData(null);
-        localStorage.clear();
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
         sessionStorage.clear();
         window.location.replace("/");
         return true;
@@ -105,6 +106,10 @@ export const AppContextProvider = (props) => {
 
   // Initial auth + user load on app mount
   useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+    }
     checkAuthAndGetUserData(false);
   }, [backendUrl]);
 
