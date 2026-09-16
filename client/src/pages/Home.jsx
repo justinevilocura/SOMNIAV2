@@ -351,8 +351,9 @@ const Home = () => {
 
                   <div className="space-y-3">
                     <a
-                      href="/downloads/somnia-v2-preview.apk"
-                      download
+                      href="https://expo.dev/accounts/jscvilocura/projects/somnia/builds/104c0f98-d330-40c0-b85a-0c2c024d55e7"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-medium text-sm flex items-center justify-center space-x-2 transition-all shadow-lg shadow-blue-500/20"
                     >
                       <ArrowDownTrayIcon className="w-5 h-5" />
@@ -360,7 +361,7 @@ const Home = () => {
                     </a>
 
                     <div className="bg-gray-800/40 border border-gray-700/60 rounded-xl p-3 text-xs text-gray-400">
-                      <strong className="text-gray-300">Quick Note:</strong> Since this is a research preview build, your phone may ask you to <em>&ldquo;Allow installs from unknown sources&rdquo;</em> in settings.
+                      <strong className="text-gray-300">Quick Note:</strong> Since this is a research preview build, your phone will prompt <em>&ldquo;Download anyway&rdquo;</em> and <em>&ldquo;Allow installs from this source&rdquo;</em>.
                     </div>
                   </div>
                 </div>
