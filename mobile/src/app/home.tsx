@@ -471,10 +471,24 @@ export default function Home() {
             )}
 
             {totalSteps === 0 && latestHeartRate === 0 && exerType === "None" && (
-              <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
-                <Text style={{ color: '#a29bfe', fontSize: 13, textAlign: 'center', fontStyle: 'italic' }}>
+              <View style={{ paddingHorizontal: 16, marginVertical: 8, alignItems: 'center' }}>
+                <Text style={{ color: '#a29bfe', fontSize: 13, textAlign: 'center', fontStyle: 'italic', marginBottom: 8 }}>
                   ↓ Pull down to fetch your Mi Fitness data and sync to Somnia
                 </Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    try {
+                      const required = ['Steps', 'HeartRate', 'SleepSession', 'ExerciseSession'];
+                      await requestPermission(required.map(m => ({ accessType: 'read', recordType: m } as any)));
+                      await fetchHealthData(false);
+                    } catch (e: any) {
+                      console.warn('Could not request permission:', e);
+                    }
+                  }}
+                  style={{ paddingVertical: 6, paddingHorizontal: 16, backgroundColor: 'rgba(93, 63, 211, 0.35)', borderColor: 'rgba(162, 89, 255, 0.4)', borderWidth: 1, borderRadius: 14 }}
+                >
+                  <Text style={{ color: '#d8b4fe', fontSize: 12, fontWeight: '600' }}>🔒 Grant Health Connect Permissions</Text>
+                </TouchableOpacity>
               </View>
             )}
 
