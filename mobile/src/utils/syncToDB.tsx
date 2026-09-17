@@ -53,30 +53,32 @@ export const syncToDB = async (
         };
 
         // Heart Rate
-        const heartRatePayload = heartRate.map((record) => ({
+        const heartRatePayload = (heartRate || []).map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || String(Date.now()),
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
-            samples: record.samples.map((s) => ({
-                beatsPerMinute: s.beatsPerMinute,
+            samples: (record.samples || []).map((s) => ({
+                beatsPerMinute: s.beatsPerMinute || 0,
                 time: s.time,
             })),
         }));
 
-        const heartRateResponse = await fetch(`${backendUrl}/api/heartRate/addHeartRate`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(heartRatePayload),
-        });
-        await handleResponse(heartRateResponse, "heart rate");
+        if (heartRatePayload.length > 0) {
+            const heartRateResponse = await fetch(`${backendUrl}/api/heartRate/addHeartRate`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(heartRatePayload),
+            });
+            await handleResponse(heartRateResponse, "heart rate");
+        }
 
         // Sleep Session
-        const sleepPayload = sleepSession.map((record) => ({
+        const sleepPayload = (sleepSession || []).map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || String(Date.now()),
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
             title: record.title || null,
@@ -87,36 +89,40 @@ export const syncToDB = async (
             })),
         }));
 
-        const sleepResponse = await fetch(`${backendUrl}/api/sleepSession/addSleepSession`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(sleepPayload),
-        });
-        await handleResponse(sleepResponse, "sleep session");
+        if (sleepPayload.length > 0) {
+            const sleepResponse = await fetch(`${backendUrl}/api/sleepSession/addSleepSession`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(sleepPayload),
+            });
+            await handleResponse(sleepResponse, "sleep session");
+        }
 
         // Steps
-        const stepsPayload = steps.map((record) => ({
+        const stepsPayload = (steps || []).map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || String(Date.now()),
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
-            count: record.count,
+            count: record.count || 0,
         }));
 
-        const stepsResponse = await fetch(`${backendUrl}/api/step/addStep`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(stepsPayload),
-        });
-        await handleResponse(stepsResponse, "steps");
+        if (stepsPayload.length > 0) {
+            const stepsResponse = await fetch(`${backendUrl}/api/step/addStep`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(stepsPayload),
+            });
+            await handleResponse(stepsResponse, "steps");
+        }
 
         // Exercise Session
         if (exerciseSession && exerciseSession.length > 0) {
             const exercisePayload = exerciseSession.map((record) => ({
                 userId: userID,
-                id: record.metadata.id,
-                lastModifiedTime: record.metadata.lastModifiedTime,
+                id: record.metadata?.id || String(Date.now()),
+                lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
                 startTime: record.startTime,
                 endTime: record.endTime,
                 title: record.title || null,

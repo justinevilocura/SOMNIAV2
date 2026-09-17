@@ -13,7 +13,7 @@ import Profile from './profile';
 import Tips from './tips';
 import { ExerciseType, SleepStageType, RecordResult } from 'react-native-health-connect';
 import { useExerciseSession } from '../hooks/useExerciseSession';
-import { initialize, requestPermission } from 'react-native-health-connect';
+import { initialize, requestPermission, getGrantedPermissions } from 'react-native-health-connect';
 import { useHeartRate } from '../hooks/useHeartRate';
 import { useSleepSession } from '../hooks/useSleepSession';
 import { useSteps } from '../hooks/useSteps';
@@ -73,239 +73,263 @@ export default function Home() {
     let selectedSteps: any[] = [];
 
     try {
-      isInitialized = await initialize();
-      if (isInitialized) {
-        await requestPermission([
-          { accessType: 'read', recordType: 'Steps' },
-          { accessType: 'read', recordType: 'HeartRate' },
-          { accessType: 'read', recordType: 'RestingHeartRate' },
-          { accessType: 'read', recordType: 'SleepSession' },
-          { accessType: 'read', recordType: 'ExerciseSession' }
-        ]);
+      try {
+        isInitialized = await initialize();
+        if (isInitialized) {
+          try {
+            const granted = (await getGrantedPermissions()) || [];
+            const required = ['Steps', 'HeartRate', 'RestingHeartRate', 'SleepSession', 'ExerciseSession'];
+            const missing = required.filter(r => !(granted || []).some((g: any) => g.recordType === r));
+            
+            if (missing.length > 0) {
+              await requestPermission(missing.map(m => ({ accessType: 'read', recordType: m })));
+            }
+          } catch (permErr) {
+            console.warn('Health Connect permission check/request warning:', permErr);
+          }
 
-        steps = await readSteps() || [];
-        heartRate = await readHeartRate() || [];
-        sleep = await readSleepSession() || [];
-        exerciseSession = await readExerciseSession() || [];
+          steps = (await readSteps()) || [];
+          heartRate = (await readHeartRate()) || [];
+          sleep = (await readSleepSession()) || [];
+          exerciseSession = (await readExerciseSession()) || [];
 
-        console.log(`=== HEALTH CONNECT REAL DATA ===`);
-        console.log(`Real Steps Count: ${steps.length}`);
-        console.log(`Real Heart Rate Count: ${heartRate.length}`);
-        console.log(`Real Sleep Count: ${sleep.length}`);
-        console.log(`Real Exercise Count: ${exerciseSession.length}`);
-      }
-    } catch (error) {
-      console.warn('Health Connect not available, using mock data.');
-    }
-
-    // REMOVED MOCK DATA - Use real data or empty arrays
-
-    let lastExerciseSession: any = null;
-    if (exerciseSession.length > 0) {
-      setExerciseDataRaw(exerciseSession);
-      const lastExercise = exerciseSession.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0];
-      lastExerciseSession = lastExercise;
-      const start = new Date(lastExercise.startTime);
-      const end = new Date(lastExercise.endTime);
-      const totalExerciseMs = end.getTime() - start.getTime();
-      const totalMinutes = Math.floor(totalExerciseMs / (1000 * 60));
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      let formattedExercise = '';
-
-      if (hours > 0) {
-        formattedExercise = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-      } else {
-        formattedExercise = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-      }
-
-      setExerSession(formattedExercise);
-
-      const getExerciseName = (value: number): string | undefined => {
-        return Object.keys(ExerciseType).find(
-          (key) => ExerciseType[key as keyof typeof ExerciseType] === value
-        );
-      };
-      const exerciseName = getExerciseName(exerciseSession[0].exerciseType);
-      setExerType(exerciseName || 'Unknown');
-    } else {
-      setExerSession("No recent exercise");
-      setExerType("None");
-    }
-
-    if (steps.length > 0) {
-      // Group steps by package name (dataOrigin) to prevent duplicate counting
-      const stepsBySource: { [key: string]: typeof steps } = {};
-      steps.forEach(record => {
-        const source = record.metadata?.dataOrigin || 'unknown';
-        if (!stepsBySource[source]) {
-          stepsBySource[source] = [];
+          console.log(`=== HEALTH CONNECT REAL DATA ===`);
+          console.log(`Real Steps Count: ${steps.length}`);
+          console.log(`Real Heart Rate Count: ${heartRate.length}`);
+          console.log(`Real Sleep Count: ${sleep.length}`);
+          console.log(`Real Exercise Count: ${exerciseSession.length}`);
         }
-        stepsBySource[source].push(record);
-      });
-
-      const sources = Object.keys(stepsBySource);
-      selectedSteps = [];
-      
-      // Prioritize Xiaomi/Mi Fitness, then Samsung Health, then whichever has the highest sum
-      const xiaomiSource = sources.find(s => s.toLowerCase().includes('xiaomi') || s.toLowerCase().includes('mi'));
-      const samsungSource = sources.find(s => s.toLowerCase().includes('samsung') || s.toLowerCase().includes('shealth'));
-      
-      if (xiaomiSource) {
-        selectedSteps = stepsBySource[xiaomiSource];
-      } else if (samsungSource) {
-        selectedSteps = stepsBySource[samsungSource];
-      } else {
-        let maxCount = -1;
-        sources.forEach(source => {
-          const sum = stepsBySource[source].reduce((s, r) => s + r.count, 0);
-          if (sum > maxCount) {
-            maxCount = sum;
-            selectedSteps = stepsBySource[source];
-          }
-        });
+      } catch (hcInitError) {
+        console.warn('Health Connect init error:', hcInitError);
       }
 
-      setStepsData(selectedSteps);
-      const total = selectedSteps.reduce((sum, record) => sum + record.count, 0);
-      setTotalSteps(total);
-    } else {
-      setStepsData([]);
-      setTotalSteps(0);
-    }
+      let lastExerciseSession: any = null;
+      if (exerciseSession && exerciseSession.length > 0) {
+        setExerciseDataRaw(exerciseSession);
+        const sortedExercise = [...exerciseSession].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+        const lastExercise = sortedExercise[0];
+        lastExerciseSession = lastExercise;
+        const start = new Date(lastExercise.startTime);
+        const end = new Date(lastExercise.endTime);
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          const totalExerciseMs = Math.max(0, end.getTime() - start.getTime());
+          const totalMinutes = Math.floor(totalExerciseMs / (1000 * 60));
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          let formattedExercise = '';
 
-
-
-    // REMOVED SLEEP MOCK DATA
-
-    let lastSleepSession: any = null;
-    if (sleep.length > 0) {
-      setSleepDataRaw(sleep);
-
-      // Grab the most recent sleep session to prevent overlapping bugs
-      const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
-      const latestSleep = sortedSleep[0];
-      lastSleepSession = latestSleep;
-
-      let totalSleepMs = 0;
-      if (latestSleep.stages && latestSleep.stages.length > 0) {
-        latestSleep.stages.forEach((stage: any) => {
-          if (stage.stage !== 1) { // Exclude AWAKE stage (1)
-            const stageStart = new Date(stage.startTime).getTime();
-            const stageEnd = new Date(stage.endTime).getTime();
-            totalSleepMs += (stageEnd - stageStart);
-          }
-        });
-      }
-      if (totalSleepMs === 0) {
-        const start = new Date(latestSleep.startTime);
-        const end = new Date(latestSleep.endTime);
-        totalSleepMs = end.getTime() - start.getTime();
-      }
-
-      const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-      setTotalSleepHours(formattedSleep);
-    } else {
-      setTotalSleepHours("0 hours and 0 minutes");
-    }
-
-    // Sleep Graph
-    const labels: string[] = [];
-    const data: number[] = [];
-    const sleepStages = sleep.flatMap(session => session.stages || []);
-
-    const getStageValue = (value: number): number => {
-      switch (value) {
-        case SleepStageType.AWAKE: return 1;
-        case SleepStageType.LIGHT: return 2;
-        case SleepStageType.DEEP: return 3;
-        case SleepStageType.REM: return 4;
-        default: return 0;
-      }
-    };
-
-    sleepStages.forEach((stage) => {
-      const start = new Date(stage.startTime);
-      const hour = start.getHours();
-      const minute = String(start.getMinutes()).padStart(2, '0');
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour % 12 || 12;
-      labels.push(`${displayHour}:${minute} ${ampm}`);
-      const numericValue = getStageValue(stage.stage);
-      data.push(numericValue);
-    });
-
-    setSleepData({
-      labels,
-      datasets: [
-        {
-          data,
-          color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
-          strokeWidth: 0, // Remove line
-        },
-      ],
-    });
-
-    // --- NEW HEART RATE LOGIC ---
-    setHeartRateData(heartRate);
-    if (heartRate.length > 0) {
-      const nowWithBuffer = Date.now() + (24 * 60 * 60 * 1000);
-      const allSamples = heartRate.flatMap(record => record.samples || []);
-      const validSamples = allSamples.filter(sample => new Date(sample.time).getTime() <= nowWithBuffer);
-
-      if (validSamples.length > 0) {
-        let mostRecentSession = null;
-        if (lastExerciseSession && lastSleepSession) {
-          if (new Date(lastExerciseSession.endTime).getTime() > new Date(lastSleepSession.endTime).getTime()) {
-            mostRecentSession = lastExerciseSession;
+          if (hours > 0) {
+            formattedExercise = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
           } else {
+            formattedExercise = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+          }
+
+          setExerSession(formattedExercise);
+        } else {
+          setExerSession("Recent exercise recorded");
+        }
+
+        const getExerciseName = (value: number): string | undefined => {
+          return Object.keys(ExerciseType).find(
+            (key) => ExerciseType[key as keyof typeof ExerciseType] === value
+          );
+        };
+        const exerciseName = lastExercise?.exerciseType ? getExerciseName(lastExercise.exerciseType) : 'Exercise';
+        setExerType(exerciseName || 'Exercise');
+      } else {
+        setExerSession("No recent exercise");
+        setExerType("None");
+      }
+
+      if (steps && steps.length > 0) {
+        const stepsBySource: { [key: string]: typeof steps } = {};
+        steps.forEach(record => {
+          const source = record?.metadata?.dataOrigin || 'unknown';
+          if (!stepsBySource[source]) {
+            stepsBySource[source] = [];
+          }
+          stepsBySource[source].push(record);
+        });
+
+        const sources = Object.keys(stepsBySource);
+        selectedSteps = [];
+        
+        const xiaomiSource = sources.find(s => s.toLowerCase().includes('xiaomi') || s.toLowerCase().includes('mi'));
+        const samsungSource = sources.find(s => s.toLowerCase().includes('samsung') || s.toLowerCase().includes('shealth'));
+        
+        if (xiaomiSource) {
+          selectedSteps = stepsBySource[xiaomiSource];
+        } else if (samsungSource) {
+          selectedSteps = stepsBySource[samsungSource];
+        } else {
+          let maxCount = -1;
+          sources.forEach(source => {
+            const sum = stepsBySource[source].reduce((s, r) => s + (r?.count || 0), 0);
+            if (sum > maxCount) {
+              maxCount = sum;
+              selectedSteps = stepsBySource[source];
+            }
+          });
+        }
+
+        setStepsData(selectedSteps);
+        const total = selectedSteps.reduce((sum, record) => sum + (record?.count || 0), 0);
+        setTotalSteps(total);
+      } else {
+        setStepsData([]);
+        setTotalSteps(0);
+      }
+
+      let lastSleepSession: any = null;
+      if (sleep && sleep.length > 0) {
+        setSleepDataRaw(sleep);
+
+        const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+        const latestSleep = sortedSleep[0];
+        lastSleepSession = latestSleep;
+
+        let totalSleepMs = 0;
+        if (latestSleep?.stages && latestSleep.stages.length > 0) {
+          latestSleep.stages.forEach((stage: any) => {
+            if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
+              const stageStart = new Date(stage.startTime).getTime();
+              const stageEnd = new Date(stage.endTime).getTime();
+              if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
+                totalSleepMs += (stageEnd - stageStart);
+              }
+            }
+          });
+        }
+        if (totalSleepMs === 0 && latestSleep?.startTime && latestSleep?.endTime) {
+          const start = new Date(latestSleep.startTime);
+          const end = new Date(latestSleep.endTime);
+          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+            totalSleepMs = Math.max(0, end.getTime() - start.getTime());
+          }
+        }
+
+        const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+        setTotalSleepHours(formattedSleep);
+
+        // Sleep Graph
+        const labels: string[] = [];
+        const data: number[] = [];
+        const sleepStages = (sleep || []).flatMap(session => session?.stages || []).filter(Boolean);
+
+        const getStageValue = (value: number): number => {
+          switch (value) {
+            case SleepStageType.AWAKE: return 1;
+            case SleepStageType.LIGHT: return 2;
+            case SleepStageType.DEEP: return 3;
+            case SleepStageType.REM: return 4;
+            default: return 0;
+          }
+        };
+
+        sleepStages.forEach((stage) => {
+          if (stage?.startTime) {
+            const start = new Date(stage.startTime);
+            if (!isNaN(start.getTime())) {
+              const hour = start.getHours();
+              const minute = String(start.getMinutes()).padStart(2, '0');
+              const ampm = hour >= 12 ? 'PM' : 'AM';
+              const displayHour = hour % 12 || 12;
+              labels.push(`${displayHour}:${minute} ${ampm}`);
+              const numericValue = getStageValue(stage.stage);
+              data.push(numericValue);
+            }
+          }
+        });
+
+        if (labels.length >= 2 && data.length >= 2) {
+          setSleepData({
+            labels,
+            datasets: [
+              {
+                data,
+                color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
+                strokeWidth: 0,
+              },
+            ],
+          });
+        } else {
+          setSleepData({
+            labels: [],
+            datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
+          });
+        }
+      } else {
+        setTotalSleepHours("0 hours and 0 minutes");
+        setSleepData({
+          labels: [],
+          datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
+        });
+      }
+
+      // --- HEART RATE LOGIC ---
+      setHeartRateData(heartRate || []);
+      if (heartRate && heartRate.length > 0) {
+        const nowWithBuffer = Date.now() + (24 * 60 * 60 * 1000);
+        const allSamples = heartRate.flatMap(record => (record?.samples && Array.isArray(record.samples)) ? record.samples : []).filter(Boolean);
+        const validSamples = allSamples.filter(sample => sample?.time && new Date(sample.time).getTime() <= nowWithBuffer && typeof sample.beatsPerMinute === 'number');
+
+        if (validSamples.length > 0) {
+          let mostRecentSession: any = null;
+          if (lastExerciseSession && lastSleepSession) {
+            if (new Date(lastExerciseSession.endTime).getTime() > new Date(lastSleepSession.endTime).getTime()) {
+              mostRecentSession = lastExerciseSession;
+            } else {
+              mostRecentSession = lastSleepSession;
+            }
+          } else if (lastExerciseSession) {
+            mostRecentSession = lastExerciseSession;
+          } else if (lastSleepSession) {
             mostRecentSession = lastSleepSession;
           }
-        } else if (lastExerciseSession) {
-          mostRecentSession = lastExerciseSession;
-        } else if (lastSleepSession) {
-          mostRecentSession = lastSleepSession;
-        }
 
-        if (mostRecentSession) {
-          const sessionStart = new Date(mostRecentSession.startTime).getTime();
-          const sessionEnd = new Date(mostRecentSession.endTime).getTime();
-          
-          const sessionSamples = validSamples.filter(sample => {
-            const time = new Date(sample.time).getTime();
-            return time >= sessionStart && time <= sessionEnd;
-          });
+          if (mostRecentSession && mostRecentSession.startTime && mostRecentSession.endTime) {
+            const sessionStart = new Date(mostRecentSession.startTime).getTime();
+            const sessionEnd = new Date(mostRecentSession.endTime).getTime();
+            
+            const sessionSamples = validSamples.filter(sample => {
+              const time = new Date(sample.time).getTime();
+              return time >= sessionStart && time <= sessionEnd;
+            });
 
-          if (sessionSamples.length > 0) {
-            const sum = sessionSamples.reduce((acc, curr) => acc + curr.beatsPerMinute, 0);
-            const avg = Math.floor(sum / sessionSamples.length);
-            setLatestHeartRate(avg);
+            if (sessionSamples.length > 0) {
+              const sum = sessionSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+              const avg = Math.floor(sum / sessionSamples.length);
+              setLatestHeartRate(avg);
+            } else {
+              const sortedSamples = [...validSamples].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+              setLatestHeartRate(sortedSamples[0]?.beatsPerMinute || 0);
+            }
           } else {
-            const sortedSamples = validSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-            setLatestHeartRate(sortedSamples[0].beatsPerMinute);
+            const sortedSamples = [...validSamples].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+            setLatestHeartRate(sortedSamples[0]?.beatsPerMinute || 0);
           }
         } else {
-          const sortedSamples = validSamples.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-          setLatestHeartRate(sortedSamples[0].beatsPerMinute);
+          setLatestHeartRate(0);
         }
       } else {
         setLatestHeartRate(0);
       }
-    } else {
-      setLatestHeartRate(0);
-    }
 
-    if (shouldSync && currentUserId) {
-      try {
-        Toast.show({ type: 'info', text1: 'Syncing to database...', text2: 'Saving health data' });
-        await syncToDB(heartRate, sleep, selectedSteps, exerciseSession, currentUserId);
-        Toast.show({ type: 'success', text1: 'Sync Successful', text2: 'Health data saved to database!' });
-      } catch (error: any) {
-        Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message || 'Failed to sync' });
+      if (shouldSync && currentUserId) {
+        try {
+          Toast.show({ type: 'info', text1: 'Syncing to database...', text2: 'Saving health data' });
+          await syncToDB(heartRate, sleep, selectedSteps, exerciseSession, currentUserId);
+          Toast.show({ type: 'success', text1: 'Sync Successful', text2: 'Health data saved to database!' });
+        } catch (error: any) {
+          console.error('syncToDB error in fetchHealthData:', error);
+          Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message || 'Failed to sync' });
+        }
       }
+    } catch (criticalError: any) {
+      console.error('fetchHealthData critical error caught:', criticalError);
     }
 
     return { heartRate, sleep, steps: selectedSteps, exerciseSession };
@@ -369,7 +393,13 @@ export default function Home() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#a259ff" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#a259ff', '#3b82f6']}
+            progressBackgroundColor="#23234b"
+            tintColor="#a259ff"
+          />
         }
       >
         <View style={{ paddingHorizontal: 16 }}>
@@ -385,8 +415,8 @@ export default function Home() {
         </View>
         {selectedTab === 'home' && (
           <>
-            {sleepData.labels.length > 0 && (
-              <ScrollView horizontal>
+            {sleepData.labels.length >= 2 && (sleepData.datasets[0]?.data?.length || 0) >= 2 && (
+              <ScrollView horizontal nestedScrollEnabled={true}>
 
                 <LineChart
                   data={sleepData}
