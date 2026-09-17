@@ -13,11 +13,19 @@ const withHealthConnectDelegate = (config) => {
   config = withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
 
-    // Inject imports
+    // Inject imports (avoiding duplicate imports)
+    const importsToInject = [];
+    if (!contents.includes('import android.os.Bundle')) {
+      importsToInject.push('import android.os.Bundle');
+    }
     if (!contents.includes('dev.matinzd.healthconnect.permissions.HealthConnectPermissionDelegate')) {
+      importsToInject.push('import dev.matinzd.healthconnect.permissions.HealthConnectPermissionDelegate');
+    }
+
+    if (importsToInject.length > 0) {
       contents = contents.replace(
         /package [^\n]+/,
-        (match) => `${match}\n\nimport android.os.Bundle\nimport dev.matinzd.healthconnect.permissions.HealthConnectPermissionDelegate`
+        (match) => `${match}\n\n${importsToInject.join('\n')}`
       );
     }
 
