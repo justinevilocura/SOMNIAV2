@@ -362,8 +362,14 @@ export default function Home() {
           user_id: authData.user_id || ''
         });
       }
-      // Automatically prompt the Health Connect permission dialog and load data right after login
-      await fetchHealthData(false);
+      // 600ms delay ensures the Android Activity is fully attached before opening native dialog
+      setTimeout(async () => {
+        try {
+          await fetchHealthData(false);
+        } catch (e) {
+          console.warn('Initial fetchHealthData error:', e);
+        }
+      }, 600);
     };
     initializeAndLoad();
   }, []);

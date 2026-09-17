@@ -43,6 +43,7 @@
     "plugins": [
       "expo-router",
       "react-native-health-connect",
+      "./plugins/withHealthConnectDelegate.js",
       [
         "expo-build-properties",
         {
