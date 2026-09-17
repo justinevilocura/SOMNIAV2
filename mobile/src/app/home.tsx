@@ -13,7 +13,7 @@ import Profile from './profile';
 import Tips from './tips';
 import { ExerciseType, SleepStageType, RecordResult } from 'react-native-health-connect';
 import { useExerciseSession } from '../hooks/useExerciseSession';
-import { initialize, getGrantedPermissions, openHealthConnectSettings } from 'react-native-health-connect';
+import { initialize, requestPermission, getGrantedPermissions } from 'react-native-health-connect';
 import { useHeartRate } from '../hooks/useHeartRate';
 import { useSleepSession } from '../hooks/useSleepSession';
 import { useSteps } from '../hooks/useSteps';
@@ -78,13 +78,14 @@ export default function Home() {
         if (isInitialized) {
           try {
             const granted = (await getGrantedPermissions()) || [];
-            const required = ['Steps', 'HeartRate', 'SleepSession', 'ExerciseSession'];
-            const hasAnyPermission = (granted || []).some((g: any) => required.includes(g.recordType));
-            if (!hasAnyPermission && (!granted || granted.length === 0)) {
-              console.log('Health Connect permissions not yet granted. Data reading will return empty until granted in Health Connect settings.');
+            const required: ('Steps' | 'HeartRate' | 'SleepSession' | 'ExerciseSession')[] = ['Steps', 'HeartRate', 'SleepSession', 'ExerciseSession'];
+            const missing = required.filter(r => !(granted || []).some((g: any) => g.recordType === r));
+            
+            if (missing.length > 0) {
+              await requestPermission(missing.map(m => ({ accessType: 'read', recordType: m } as any)));
             }
           } catch (permErr) {
-            console.warn('Health Connect permission check warning:', permErr);
+            console.warn('Health Connect permission check/request warning:', permErr);
           }
 
           steps = (await readSteps()) || [];
@@ -351,7 +352,7 @@ export default function Home() {
   const [selectedTab, setSelectedTab] = useState(params.tab ? params.tab.toString() : 'home');
 
   useEffect(() => {
-    const loadUserData = async () => {
+    const initializeAndLoad = async () => {
       const authDataString = await AsyncStorage.getItem('authData');
       if (authDataString) {
         const authData = JSON.parse(authDataString);
@@ -361,8 +362,10 @@ export default function Home() {
           user_id: authData.user_id || ''
         });
       }
+      // Automatically prompt the Health Connect permission dialog and load data right after login
+      await fetchHealthData(false);
     };
-    loadUserData();
+    initializeAndLoad();
   }, []);
 
   const statBoxes = [
@@ -462,22 +465,10 @@ export default function Home() {
             )}
 
             {totalSteps === 0 && latestHeartRate === 0 && exerType === "None" && (
-              <View style={{ paddingHorizontal: 16, marginVertical: 8, alignItems: 'center' }}>
-                <Text style={{ color: '#a29bfe', fontSize: 13, textAlign: 'center', fontStyle: 'italic', marginBottom: 6 }}>
+              <View style={{ paddingHorizontal: 16, marginVertical: 8 }}>
+                <Text style={{ color: '#a29bfe', fontSize: 13, textAlign: 'center', fontStyle: 'italic' }}>
                   ↓ Pull down to fetch your Mi Fitness data and sync to Somnia
                 </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    try {
-                      openHealthConnectSettings();
-                    } catch (e: any) {
-                      console.warn('Could not open Health Connect settings:', e);
-                    }
-                  }}
-                  style={{ paddingVertical: 4, paddingHorizontal: 12, backgroundColor: 'rgba(162, 89, 255, 0.2)', borderRadius: 12 }}
-                >
-                  <Text style={{ color: '#d8b4fe', fontSize: 12 }}>⚙️ Health Connect Settings</Text>
-                </TouchableOpacity>
               </View>
             )}
 
