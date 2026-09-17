@@ -17,12 +17,15 @@ export const useSleepSession = (date: Date) => {
   };
 
   const readSleepSession = useCallback(async () => {
-    const { records } = await readRecords('SleepSession', {
-      timeRangeFilter,
-    });
-
-    // console.log('SleepSession records:', JSON.stringify(records, null, 2));
-    return records;
+    try {
+      const { records } = await readRecords('SleepSession', {
+        timeRangeFilter,
+      });
+      return records || [];
+    } catch (error) {
+      console.warn('readSleepSession error (handled gracefully):', error);
+      return [];
+    }
   }, [timeRangeFilter]);
 
   return {

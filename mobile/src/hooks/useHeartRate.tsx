@@ -4,7 +4,7 @@ import { TimeRangeFilter } from 'react-native-health-connect/lib/typescript/type
 
 export const useHeartRate = (date: Date) => {
   const startDate = new Date(date);
-  startDate.setDate(startDate.getDate() - 30); // Look back 30 days
+  startDate.setDate(startDate.getDate() - 1); // Look back 1 day (covers previous 24h and today)
   startDate.setHours(0, 0, 0, 0);
 
   const endDate = new Date(date); // Clone for end
@@ -17,12 +17,15 @@ export const useHeartRate = (date: Date) => {
   };
 
   const readHeartRate = useCallback(async () => {
-    const { records } = await readRecords('HeartRate', {
-      timeRangeFilter,
-    });
-
-    //console.log('HeartRate records:', JSON.stringify(records, null, 2));
-    return records;
+    try {
+      const { records } = await readRecords('HeartRate', {
+        timeRangeFilter,
+      });
+      return records || [];
+    } catch (error) {
+      console.warn('readHeartRate error (handled gracefully):', error);
+      return [];
+    }
   }, [timeRangeFilter]);
 
   return {

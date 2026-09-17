@@ -17,12 +17,15 @@ export const useExerciseSession = (date: Date) => {
   };
 
   const readExerciseSession = useCallback(async () => {
-    const { records } = await readRecords('ExerciseSession', {
-      timeRangeFilter,
-    });
-
-    //console.log('Exercise records:', JSON.stringify(records, null, 2));
-    return records;
+    try {
+      const { records } = await readRecords('ExerciseSession', {
+        timeRangeFilter,
+      });
+      return records || [];
+    } catch (error) {
+      console.warn('readExerciseSession error (handled gracefully):', error);
+      return [];
+    }
   }, [timeRangeFilter]);
 
   return {

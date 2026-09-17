@@ -16,12 +16,15 @@ export const useSteps = (date: Date) => {
   };
 
   const readSteps = useCallback(async () => {
-    const { records } = await readRecords('Steps', {
-      timeRangeFilter,
-    });
-
-    //console.log('Steps records:', JSON.stringify(records, null, 2));
-    return records;
+    try {
+      const { records } = await readRecords('Steps', {
+        timeRangeFilter,
+      });
+      return records || [];
+    } catch (error) {
+      console.warn('readSteps error (handled gracefully):', error);
+      return [];
+    }
   }, [timeRangeFilter]);
 
   return {
