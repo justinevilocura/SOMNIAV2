@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -63,6 +64,7 @@ const App = () => {
           </ProtectedRoute>
         } /> */}
       </Routes>
+      <Analytics />
     </div>
   );
 };
