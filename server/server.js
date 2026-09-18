@@ -29,6 +29,7 @@ const allowedOrigins = [
     'exp://127.0.0.1:19000',         // Expo mobile local dev (iOS/Android)
     'http://192.168.254.142:4000',
     'http://172.20.10.2:4000',
+    'https://somniav2-production.up.railway.app',
     'https://somnia-17eu.onrender.com',
     'https://somnia-api-iuvq.onrender.com',  // Replace with your LAN IP if using physical device
 ];

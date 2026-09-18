@@ -15,7 +15,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
 
   const router = useRouter();
-  const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2.onrender.com';
+  const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
   const handleRegister = async () => {
     console.log('Register button pressed!');

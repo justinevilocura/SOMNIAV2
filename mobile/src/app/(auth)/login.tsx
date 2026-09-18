@@ -17,8 +17,8 @@ export default function Login() {
 
     const router = useRouter();
 
-    // Production Render backend with env override
-    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2.onrender.com';
+    // Railway production backend with env override
+    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
     const handleLogin = async () => {
         setIsLoading(true);
@@ -38,6 +38,7 @@ export default function Login() {
                     'Content-Type': 'application/json',
                 },
                 withCredentials: true,
+                timeout: 15000,
             });
 
             // Handle successful login

@@ -1,7 +1,7 @@
 import { RecordResult } from "react-native-health-connect";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2.onrender.com';
+const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
 const handleResponse = async (response: Response, dataType: string) => {
     if (!response.ok) {

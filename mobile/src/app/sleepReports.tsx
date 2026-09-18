@@ -26,7 +26,7 @@ export default function SleepReports() {
 
   const fetchSleepData = async () => {
     try {
-      const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.50.77.201:4000';
+      const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
       const token = await AsyncStorage.getItem('token');
 
       if (!token) return;

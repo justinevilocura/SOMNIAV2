@@ -34,7 +34,7 @@ export default function SleepGoals() {
     }
   };
 
-  const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'http://10.50.77.201:4000';
+  const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
   const saveGoals = async () => {
     try {
