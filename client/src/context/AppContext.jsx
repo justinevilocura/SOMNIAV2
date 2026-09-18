@@ -10,7 +10,7 @@ export const AppContext = createContext();
 
 export const AppContextProvider = (props) => {
   const backendUrl =
-    import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
+    import.meta.env.VITE_BACKEND_URL || "https://somniav2-production.up.railway.app";
 
   const [isLoggedin, setIsLoggedin] = useState(false);
   const [userData, setUserData] = useState(null);
@@ -25,10 +25,13 @@ export const AppContextProvider = (props) => {
     try {
       setIsLoading(true);
 
+      const savedToken = localStorage.getItem('token');
+      const authHeaders = savedToken ? { Authorization: `Bearer ${savedToken}` } : {};
+
       // 1. Check auth
       const { data: authData } = await axios.get(
         `${backendUrl}/api/auth/is-auth`,
-        { withCredentials: true }
+        { withCredentials: true, headers: authHeaders }
       );
 
       if (!authData.success) {
@@ -40,7 +43,7 @@ export const AppContextProvider = (props) => {
       // 2. Get user data
       const { data: userResponse } = await axios.get(
         `${backendUrl}/api/user/data`,
-        { withCredentials: true }
+        { withCredentials: true, headers: authHeaders }
       );
 
       if (userResponse.success) {

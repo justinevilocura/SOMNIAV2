@@ -47,10 +47,12 @@ export const register = async (req, res) => {
         });
         */
 
+        const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || Boolean(process.env.RAILWAY_ENVIRONMENT) || (req.headers.origin && req.headers.origin.includes('vercel.app'));
+
         res.cookie('token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
+            secure: isProd,
+            sameSite: isProd ? 'None' : 'Strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -109,7 +111,7 @@ export const login = async (req, res) => {
         });
         */
 
-        const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || (req.headers.origin && req.headers.origin.includes('vercel.app'));
+        const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || Boolean(process.env.RAILWAY_ENVIRONMENT) || (req.headers.origin && req.headers.origin.includes('vercel.app'));
 
         res.cookie('token', token, {
             httpOnly: true,

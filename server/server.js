@@ -33,6 +33,7 @@ const allowedOrigins = [
     'https://somnia-17eu.onrender.com',
     'https://somnia-api-iuvq.onrender.com',
     'https://somniav2.onrender.com',
+    'https://somniav2-production.up.railway.app',
 ];
 
 
