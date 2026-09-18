@@ -26,8 +26,11 @@ const Step = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching sleep data from:', `${backendUrl}/api/sleepSession/stats`);
-      const response = await axios.get(`${backendUrl}/api/step/stats`, {
+      const savedToken = localStorage.getItem('token');
+      const authHeaders = savedToken ? { Authorization: `Bearer ${savedToken}` } : {};
+      const tzOffset = new Date().getTimezoneOffset();
+      const response = await axios.get(`${backendUrl}/api/step/stats?tzOffset=${tzOffset}`, {
+        headers: authHeaders,
         withCredentials: true,
         timeout: 10000,
       });

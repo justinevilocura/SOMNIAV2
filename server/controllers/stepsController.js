@@ -48,14 +48,28 @@ export const getStepStats = async (req, res) => {
 
     console.log("Fetching step data for user:", userId);
 
-    // Get start and end of today
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    // Timezone-aware "today" calculation
+    // Accepts tzOffset query param or x-timezone-offset header (in minutes, from new Date().getTimezoneOffset())
+    // Defaults to -480 (Asia/Manila UTC+8, Philippine time)
+    const tzOffsetMinutes = req.query.tzOffset !== undefined
+      ? parseInt(req.query.tzOffset)
+      : (req.headers['x-timezone-offset'] ? parseInt(req.headers['x-timezone-offset']) : -480);
 
-    console.log("Filtering for today:", startOfToday, "to", endOfToday);
+    const now = new Date();
+    // Convert current UTC time to client's local date
+    const clientNow = new Date(now.getTime() - (tzOffsetMinutes * 60 * 1000));
+
+    // Client start of today in UTC
+    const clientStartOfDay = new Date(clientNow);
+    clientStartOfDay.setUTCHours(0, 0, 0, 0);
+    const startOfToday = new Date(clientStartOfDay.getTime() + (tzOffsetMinutes * 60 * 1000));
+
+    // Client end of today in UTC
+    const clientEndOfDay = new Date(clientNow);
+    clientEndOfDay.setUTCHours(23, 59, 59, 999);
+    const endOfToday = new Date(clientEndOfDay.getTime() + (tzOffsetMinutes * 60 * 1000));
+
+    console.log("Filtering for today:", startOfToday.toISOString(), "to", endOfToday.toISOString());
 
     // Find step data for today only
     const todayStepData = await Step.find({ 
@@ -90,12 +104,9 @@ export const getStepStats = async (req, res) => {
       overallAverageSteps = Math.round(overallTotalSteps / allStepData.length);
     }
 
-    // For comparison with previous days, get yesterday's data
-    const startOfYesterday = new Date(startOfToday);
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-    
-    const endOfYesterday = new Date(endOfToday);
-    endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+    // For comparison with previous days, get yesterday's data in client's timezone
+    const startOfYesterday = new Date(startOfToday.getTime() - (24 * 60 * 60 * 1000));
+    const endOfYesterday = new Date(endOfToday.getTime() - (24 * 60 * 60 * 1000));
 
     const yesterdayStepData = await Step.find({ 
       user: userId,
