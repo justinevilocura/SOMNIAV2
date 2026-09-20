@@ -83,45 +83,57 @@ export const getLatestSleepSession = async (req, res) => {
       stagesCount: latestSession.stages?.length || 0
     });
 
-    // Calculate duration for the latest session only (excluding AWAKE (1) and OUT_OF_BED (3) stages)
-    let sessionDurationMinutes = 0;
+    // Find all sleep sessions belonging to the same sleep day as latestSession
+    // (sessions ending within 18 hours prior to latestSession.endTime and no later than latestSession.endTime)
+    const latestEnd = new Date(latestSession.endTime);
+    const windowStart = new Date(latestEnd.getTime() - (18 * 60 * 60 * 1000));
 
-    if (latestSession.stages && latestSession.stages.length > 0) {
-      // Calculate sleep time from stages
-      latestSession.stages.forEach(stage => {
-        if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
-          const stageStartTime = new Date(stage.startTime);
-          const stageEndTime = new Date(stage.endTime);
-          const stageDurationMs = stageEndTime - stageStartTime;
-          const stageDurationMinutes = stageDurationMs / (1000 * 60);
-          
-          sessionDurationMinutes += stageDurationMinutes;
-        }
-      });
-    } else {
-      // Fallback: use session start/end time if no stages
-      const sessionStartTime = new Date(latestSession.startTime);
-      const sessionEndTime = new Date(latestSession.endTime);
-      const sessionDurationMs = sessionEndTime - sessionStartTime;
-      sessionDurationMinutes = sessionDurationMs / (1000 * 60);
-    }
+    const daySessions = await SleepSession.find({
+      user: userId,
+      endTime: { $gte: windowStart, $lte: latestEnd }
+    }).sort({ startTime: 1 });
 
-    // Ceiling to match Apple Health/mobile app display rounding
-    const roundedMinutes = Math.ceil(sessionDurationMinutes);
-    const sessionDurationHours = Math.round((roundedMinutes / 60) * 100) / 100;
+    let totalDurationMs = 0;
+    let earliestStart = latestSession.startTime;
 
-    console.log(`Latest session duration: ${roundedMinutes} minutes (${sessionDurationHours} hours)`);
+    daySessions.forEach(session => {
+      if (new Date(session.startTime) < new Date(earliestStart)) {
+        earliestStart = session.startTime;
+      }
+      let sessionMs = 0;
+      if (session.stages && session.stages.length > 0) {
+        session.stages.forEach(stage => {
+          if (stage.stage !== 1) { // Exclude AWAKE
+            const sStart = new Date(stage.startTime).getTime();
+            const sEnd = new Date(stage.endTime).getTime();
+            if (!isNaN(sStart) && !isNaN(sEnd) && sEnd > sStart) {
+              sessionMs += (sEnd - sStart);
+            }
+          }
+        });
+      }
+      if (sessionMs === 0) {
+        sessionMs = Math.max(0, new Date(session.endTime) - new Date(session.startTime));
+      }
+      totalDurationMs += sessionMs;
+    });
+
+    const totalDurationMinutes = totalDurationMs / (1000 * 60);
+    const totalDurationHours = Math.round((totalDurationMinutes / 60) * 100) / 100;
+
+    console.log(`Aggregated latest sleep: ${Math.round(totalDurationMinutes)} minutes (${totalDurationHours} hours) across ${daySessions.length} session(s)`);
 
     return res.status(200).json({
       success: true,
       data: {
-        latestSessionMinutes: roundedMinutes,
-        latestSessionHours: sessionDurationHours,
-        sessionStartTime: latestSession.startTime,
+        latestSessionMinutes: Math.round(totalDurationMinutes),
+        latestSessionHours: totalDurationHours,
+        sessionStartTime: earliestStart,
         sessionEndTime: latestSession.endTime,
         sessionId: latestSession.id,
         sessionTitle: latestSession.title,
-        lastModified: latestSession.lastModifiedTime
+        lastModified: latestSession.lastModifiedTime,
+        sessionCount: daySessions.length
       }
     });
 
