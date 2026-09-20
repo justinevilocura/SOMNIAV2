@@ -254,6 +254,7 @@ const SleepHistoryView = () => {
   const calculateSessionDuration = (session) => {
     if (session.stages && session.stages.length > 0) {
       return session.stages.reduce((total, stage) => {
+        if (stage.stage === 1) return total; // Exclude AWAKE stage (1)
         const duration =
           (new Date(stage.endTime) - new Date(stage.startTime)) /
           (1000 * 60 * 60);
@@ -277,9 +278,9 @@ const SleepHistoryView = () => {
       date.setDate(date.getDate() - i);
       const dayName = days[date.getDay()];
 
-      // All sessions that belong to this calendar day
+      // All sessions that belong to this calendar day (using wake-up / endTime)
       const sessionsForDay = sessions.filter((session) => {
-        const sessionDate = new Date(session.startTime);
+        const sessionDate = new Date(session.endTime || session.startTime);
         return sessionDate.toDateString() === date.toDateString();
       });
 

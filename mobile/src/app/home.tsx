@@ -188,25 +188,52 @@ export default function Home() {
         const latestSleep = sortedSleep[0];
         lastSleepSession = latestSleep;
 
-        let totalSleepMs = 0;
-        if (latestSleep?.stages && latestSleep.stages.length > 0) {
-          latestSleep.stages.forEach((stage: any) => {
-            if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
-              const stageStart = new Date(stage.startTime).getTime();
-              const stageEnd = new Date(stage.endTime).getTime();
-              if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
-                totalSleepMs += (stageEnd - stageStart);
-              }
-            }
+        // Group sessions belonging to today (or the latest sleep date)
+        const now = new Date();
+        const isSameDay = (d1: Date, d2: Date) =>
+          d1.getFullYear() === d2.getFullYear() &&
+          d1.getMonth() === d2.getMonth() &&
+          d1.getDate() === d2.getDate();
+
+        // 1. Check if there are sessions ending today (local calendar date)
+        let relevantSessions = sortedSleep.filter((s: any) => {
+          if (!s?.endTime) return false;
+          return isSameDay(new Date(s.endTime), now);
+        });
+
+        // 2. Fallback: If no sessions ended today, take all sessions from the day of the most recent session
+        if (relevantSessions.length === 0 && sortedSleep.length > 0) {
+          const latestEndDate = new Date(latestSleep.endTime);
+          relevantSessions = sortedSleep.filter((s: any) => {
+            if (!s?.endTime) return false;
+            return isSameDay(new Date(s.endTime), latestEndDate);
           });
         }
-        if (totalSleepMs === 0 && latestSleep?.startTime && latestSleep?.endTime) {
-          const start = new Date(latestSleep.startTime);
-          const end = new Date(latestSleep.endTime);
-          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-            totalSleepMs = Math.max(0, end.getTime() - start.getTime());
+
+        // Sum sleep duration across all relevant sessions for today (excluding AWAKE stage 1)
+        let totalSleepMs = 0;
+        relevantSessions.forEach((session: any) => {
+          let sessionSleepMs = 0;
+          if (session?.stages && session.stages.length > 0) {
+            session.stages.forEach((stage: any) => {
+              if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
+                const stageStart = new Date(stage.startTime).getTime();
+                const stageEnd = new Date(stage.endTime).getTime();
+                if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
+                  sessionSleepMs += (stageEnd - stageStart);
+                }
+              }
+            });
           }
-        }
+          if (sessionSleepMs === 0 && session?.startTime && session?.endTime) {
+            const start = new Date(session.startTime);
+            const end = new Date(session.endTime);
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+              sessionSleepMs = Math.max(0, end.getTime() - start.getTime());
+            }
+          }
+          totalSleepMs += sessionSleepMs;
+        });
 
         const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
         const hours = Math.floor(totalMinutes / 60);
@@ -214,10 +241,15 @@ export default function Home() {
         const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
         setTotalSleepHours(formattedSleep);
 
-        // Sleep Graph
+        // Sleep Graph: extract stages from today's relevant sessions
         const labels: string[] = [];
         const data: number[] = [];
-        const sleepStages = (sleep || []).flatMap(session => session?.stages || []).filter(Boolean);
+        const sleepStages = (relevantSessions.length > 0 ? relevantSessions : [latestSleep])
+          .flatMap((session: any) => session?.stages || [])
+          .filter(Boolean);
+
+        // Sort stages chronologically so the graph flows in order from earliest to latest
+        sleepStages.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
         const getStageValue = (value: number): number => {
           switch (value) {

@@ -83,36 +83,57 @@ export const getLatestSleepSession = async (req, res) => {
       stagesCount: latestSession.stages?.length || 0
     });
 
-    // Calculate duration for the latest session only
-    let sessionDurationMinutes = 0;
+    // Find all sleep sessions belonging to the same sleep day as latestSession
+    // (sessions ending within 18 hours prior to latestSession.endTime and no later than latestSession.endTime)
+    const latestEnd = new Date(latestSession.endTime);
+    const windowStart = new Date(latestEnd.getTime() - (18 * 60 * 60 * 1000));
 
-    let sessionDurationMs = 0;
-    if (latestSession.stages && latestSession.stages.length > 0) {
-      latestSession.stages.forEach(stage => {
-        if (stage.stage !== 1) {
-          sessionDurationMs += (new Date(stage.endTime) - new Date(stage.startTime));
-        }
-      });
-    }
-    if (sessionDurationMs === 0) {
-      sessionDurationMs = new Date(latestSession.endTime) - new Date(latestSession.startTime);
-    }
-    sessionDurationMinutes = sessionDurationMs / (1000 * 60);
+    const daySessions = await SleepSession.find({
+      user: userId,
+      endTime: { $gte: windowStart, $lte: latestEnd }
+    }).sort({ startTime: 1 });
 
-    const sessionDurationHours = Math.round((sessionDurationMinutes / 60) * 100) / 100;
+    let totalDurationMs = 0;
+    let earliestStart = latestSession.startTime;
 
-    console.log(`Latest session duration: ${Math.round(sessionDurationMinutes)} minutes (${sessionDurationHours} hours)`);
+    daySessions.forEach(session => {
+      if (new Date(session.startTime) < new Date(earliestStart)) {
+        earliestStart = session.startTime;
+      }
+      let sessionMs = 0;
+      if (session.stages && session.stages.length > 0) {
+        session.stages.forEach(stage => {
+          if (stage.stage !== 1) { // Exclude AWAKE
+            const sStart = new Date(stage.startTime).getTime();
+            const sEnd = new Date(stage.endTime).getTime();
+            if (!isNaN(sStart) && !isNaN(sEnd) && sEnd > sStart) {
+              sessionMs += (sEnd - sStart);
+            }
+          }
+        });
+      }
+      if (sessionMs === 0) {
+        sessionMs = Math.max(0, new Date(session.endTime) - new Date(session.startTime));
+      }
+      totalDurationMs += sessionMs;
+    });
+
+    const totalDurationMinutes = totalDurationMs / (1000 * 60);
+    const totalDurationHours = Math.round((totalDurationMinutes / 60) * 100) / 100;
+
+    console.log(`Aggregated latest sleep: ${Math.round(totalDurationMinutes)} minutes (${totalDurationHours} hours) across ${daySessions.length} session(s)`);
 
     return res.status(200).json({
       success: true,
       data: {
-        latestSessionMinutes: Math.round(sessionDurationMinutes),
-        latestSessionHours: sessionDurationHours,
-        sessionStartTime: latestSession.startTime,
+        latestSessionMinutes: Math.round(totalDurationMinutes),
+        latestSessionHours: totalDurationHours,
+        sessionStartTime: earliestStart,
         sessionEndTime: latestSession.endTime,
         sessionId: latestSession.id,
         sessionTitle: latestSession.title,
-        lastModified: latestSession.lastModifiedTime
+        lastModified: latestSession.lastModifiedTime,
+        sessionCount: daySessions.length
       }
     });
 

@@ -53,10 +53,10 @@ export default function SleepReports() {
           date.setDate(date.getDate() - i);
           dynamicLabels.push(daysArray[date.getDay()]);
 
-          // Find sessions for this specific calendar day
+          // Find sessions for this specific calendar day (based on wake-up time / endTime)
           let dayHours = 0;
           json.data.sessions.forEach((session: any) => {
-            const sessionDate = new Date(session.startTime);
+            const sessionDate = new Date(session.endTime || session.startTime);
             if (sessionDate.toDateString() === date.toDateString()) {
               dayHours += session.durationHours;
             }
