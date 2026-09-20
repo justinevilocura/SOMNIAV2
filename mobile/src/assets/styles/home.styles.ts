@@ -259,6 +259,7 @@ const styles = StyleSheet.create<Styles>({
     color: '#fff',
     fontSize: 14,
     opacity: 0.8,
+    textAlign: 'center',
   },
   recommendationItem: {
     flexDirection: 'row',

@@ -33,7 +33,7 @@ export default function Home() {
   const [sleepDataRaw, setSleepDataRaw] = useState([]);
   const [stepsData, setStepsData] = useState([]);
   const [exerciseDataRaw, setExerciseDataRaw] = useState([]);
-  const [exerSession, setExerSession] = useState("No recent exercise");
+  const [exerSession, setExerSession] = useState("No recent activities for today");
   const [exerType, setExerType] = useState("None");
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState("0 hours and 0 minutes");
@@ -103,10 +103,23 @@ export default function Home() {
         console.warn('Health Connect init error:', hcInitError);
       }
 
+      const now = new Date();
+      const isSameDay = (d1: Date, d2: Date) =>
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
+
       let lastExerciseSession: any = null;
-      if (exerciseSession && exerciseSession.length > 0) {
-        setExerciseDataRaw(exerciseSession);
-        const sortedExercise = [...exerciseSession].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+      // Only consider exercises recorded for today
+      const todayExercises = (exerciseSession || []).filter((record: any) => {
+        const time = record?.endTime || record?.startTime;
+        if (!time) return false;
+        return isSameDay(new Date(time), now);
+      });
+
+      if (todayExercises.length > 0) {
+        setExerciseDataRaw(todayExercises);
+        const sortedExercise = [...todayExercises].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
         const lastExercise = sortedExercise[0];
         lastExerciseSession = lastExercise;
         const start = new Date(lastExercise.startTime);
@@ -137,7 +150,8 @@ export default function Home() {
         const exerciseName = lastExercise?.exerciseType ? getExerciseName(lastExercise.exerciseType) : 'Exercise';
         setExerType(exerciseName || 'Exercise');
       } else {
-        setExerSession("No recent exercise");
+        setExerciseDataRaw([]);
+        setExerSession("No recent activities for today");
         setExerType("None");
       }
 
@@ -185,115 +199,109 @@ export default function Home() {
         setSleepDataRaw(sleep);
 
         const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
-        const latestSleep = sortedSleep[0];
-        lastSleepSession = latestSleep;
 
-        // Group sessions belonging to today (or the latest sleep date)
-        const now = new Date();
-        const isSameDay = (d1: Date, d2: Date) =>
-          d1.getFullYear() === d2.getFullYear() &&
-          d1.getMonth() === d2.getMonth() &&
-          d1.getDate() === d2.getDate();
-
-        // 1. Check if there are sessions ending today (local calendar date)
+        // Check if there are sessions ending today (local calendar date)
         let relevantSessions = sortedSleep.filter((s: any) => {
           if (!s?.endTime) return false;
           return isSameDay(new Date(s.endTime), now);
         });
 
-        // 2. Fallback: If no sessions ended today, take all sessions from the day of the most recent session
-        if (relevantSessions.length === 0 && sortedSleep.length > 0) {
-          const latestEndDate = new Date(latestSleep.endTime);
-          relevantSessions = sortedSleep.filter((s: any) => {
-            if (!s?.endTime) return false;
-            return isSameDay(new Date(s.endTime), latestEndDate);
-          });
-        }
+        if (relevantSessions.length > 0) {
+          lastSleepSession = relevantSessions[0];
 
-        // Sum sleep duration across all relevant sessions for today (excluding AWAKE stage 1)
-        let totalSleepMs = 0;
-        relevantSessions.forEach((session: any) => {
-          let sessionSleepMs = 0;
-          if (session?.stages && session.stages.length > 0) {
-            session.stages.forEach((stage: any) => {
-              if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
-                const stageStart = new Date(stage.startTime).getTime();
-                const stageEnd = new Date(stage.endTime).getTime();
-                if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
-                  sessionSleepMs += (stageEnd - stageStart);
+          // Sum sleep duration across all relevant sessions for today (excluding AWAKE stage 1)
+          let totalSleepMs = 0;
+          relevantSessions.forEach((session: any) => {
+            let sessionSleepMs = 0;
+            if (session?.stages && session.stages.length > 0) {
+              session.stages.forEach((stage: any) => {
+                if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
+                  const stageStart = new Date(stage.startTime).getTime();
+                  const stageEnd = new Date(stage.endTime).getTime();
+                  if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
+                    sessionSleepMs += (stageEnd - stageStart);
+                  }
                 }
+              });
+            }
+            if (sessionSleepMs === 0 && session?.startTime && session?.endTime) {
+              const start = new Date(session.startTime);
+              const end = new Date(session.endTime);
+              if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                sessionSleepMs = Math.max(0, end.getTime() - start.getTime());
               }
+            }
+            totalSleepMs += sessionSleepMs;
+          });
+
+          const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+          setTotalSleepHours(formattedSleep);
+
+          // Sleep Graph: extract stages from today's relevant sessions
+          const labels: string[] = [];
+          const data: number[] = [];
+          const sleepStages = relevantSessions
+            .flatMap((session: any) => session?.stages || [])
+            .filter(Boolean);
+
+          // Sort stages chronologically so the graph flows in order from earliest to latest
+          sleepStages.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+          const getStageValue = (value: number): number => {
+            switch (value) {
+              case SleepStageType.AWAKE: return 1;
+              case SleepStageType.LIGHT: return 2;
+              case SleepStageType.DEEP: return 3;
+              case SleepStageType.REM: return 4;
+              default: return 0;
+            }
+          };
+
+          sleepStages.forEach((stage) => {
+            if (stage?.startTime) {
+              const start = new Date(stage.startTime);
+              if (!isNaN(start.getTime())) {
+                const hour = start.getHours();
+                const minute = String(start.getMinutes()).padStart(2, '0');
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour % 12 || 12;
+                labels.push(`${displayHour}:${minute} ${ampm}`);
+                const numericValue = getStageValue(stage.stage);
+                data.push(numericValue);
+              }
+            }
+          });
+
+          if (labels.length >= 2 && data.length >= 2) {
+            setSleepData({
+              labels,
+              datasets: [
+                {
+                  data,
+                  color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
+                  strokeWidth: 0,
+                },
+              ],
+            });
+          } else {
+            setSleepData({
+              labels: [],
+              datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
             });
           }
-          if (sessionSleepMs === 0 && session?.startTime && session?.endTime) {
-            const start = new Date(session.startTime);
-            const end = new Date(session.endTime);
-            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-              sessionSleepMs = Math.max(0, end.getTime() - start.getTime());
-            }
-          }
-          totalSleepMs += sessionSleepMs;
-        });
-
-        const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-        setTotalSleepHours(formattedSleep);
-
-        // Sleep Graph: extract stages from today's relevant sessions
-        const labels: string[] = [];
-        const data: number[] = [];
-        const sleepStages = (relevantSessions.length > 0 ? relevantSessions : [latestSleep])
-          .flatMap((session: any) => session?.stages || [])
-          .filter(Boolean);
-
-        // Sort stages chronologically so the graph flows in order from earliest to latest
-        sleepStages.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-
-        const getStageValue = (value: number): number => {
-          switch (value) {
-            case SleepStageType.AWAKE: return 1;
-            case SleepStageType.LIGHT: return 2;
-            case SleepStageType.DEEP: return 3;
-            case SleepStageType.REM: return 4;
-            default: return 0;
-          }
-        };
-
-        sleepStages.forEach((stage) => {
-          if (stage?.startTime) {
-            const start = new Date(stage.startTime);
-            if (!isNaN(start.getTime())) {
-              const hour = start.getHours();
-              const minute = String(start.getMinutes()).padStart(2, '0');
-              const ampm = hour >= 12 ? 'PM' : 'AM';
-              const displayHour = hour % 12 || 12;
-              labels.push(`${displayHour}:${minute} ${ampm}`);
-              const numericValue = getStageValue(stage.stage);
-              data.push(numericValue);
-            }
-          }
-        });
-
-        if (labels.length >= 2 && data.length >= 2) {
-          setSleepData({
-            labels,
-            datasets: [
-              {
-                data,
-                color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
-                strokeWidth: 0,
-              },
-            ],
-          });
         } else {
+          lastSleepSession = null;
+          setTotalSleepHours("0 hours and 0 minutes");
           setSleepData({
             labels: [],
             datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
           });
         }
       } else {
+        lastSleepSession = null;
         setTotalSleepHours("0 hours and 0 minutes");
         setSleepData({
           labels: [],
@@ -304,9 +312,9 @@ export default function Home() {
       // --- HEART RATE LOGIC ---
       setHeartRateData(heartRate || []);
       if (heartRate && heartRate.length > 0) {
-        const nowWithBuffer = Date.now() + (24 * 60 * 60 * 1000);
         const allSamples = heartRate.flatMap(record => (record?.samples && Array.isArray(record.samples)) ? record.samples : []).filter(Boolean);
-        const validSamples = allSamples.filter(sample => sample?.time && new Date(sample.time).getTime() <= nowWithBuffer && typeof sample.beatsPerMinute === 'number');
+        // Only consider heart rate samples recorded for today
+        const validSamples = allSamples.filter(sample => sample?.time && isSameDay(new Date(sample.time), now) && typeof sample.beatsPerMinute === 'number');
 
         if (validSamples.length > 0) {
           let mostRecentSession: any = null;
@@ -406,11 +414,40 @@ export default function Home() {
     initializeAndLoad();
   }, []);
 
+  const hasExerciseToday = exerType !== 'None' && exerSession !== 'No recent activities for today';
+  const hasStepsToday = totalSteps > 0;
+  const hasSleepToday = totalSleepHours !== '0 hours and 0 minutes' && !totalSleepHours.startsWith('0 hour');
+  const hasHeartRateToday = latestHeartRate > 0;
+
   const statBoxes = [
-    { label: exerSession, value: exerType, unit: '', icon: 'barbell-outline', color: '#ff8c42' },
-    { label: 'Total Steps Today', value: totalSteps, unit: '', icon: 'walk-outline', color: '#43e97b' },
-    { label: 'Hours of Sleep', value: totalSleepHours, unit: '', icon: 'moon-outline', color: '#5d3fd3' },
-    { label: 'Session Avg BPM', value: latestHeartRate, unit: 'bpm', icon: 'heart-outline', color: '#ff4d6d' },
+    {
+      label: hasExerciseToday ? exerSession : 'No recent activities for today',
+      value: hasExerciseToday ? exerType : 'None',
+      unit: '',
+      icon: 'barbell-outline',
+      color: '#ff8c42',
+    },
+    {
+      label: hasStepsToday ? 'Total Steps Today' : 'total steps for today',
+      value: totalSteps,
+      unit: '',
+      icon: 'walk-outline',
+      color: '#43e97b',
+    },
+    {
+      label: hasSleepToday ? 'Hours of Sleep' : 'of sleep for today',
+      value: totalSleepHours,
+      unit: '',
+      icon: 'moon-outline',
+      color: '#5d3fd3',
+    },
+    {
+      label: hasHeartRateToday ? 'Session Avg BPM' : 'session avg BPM',
+      value: latestHeartRate,
+      unit: 'BPM',
+      icon: 'heart-outline',
+      color: '#ff4d6d',
+    },
   ];
 
   return (
@@ -526,7 +563,7 @@ export default function Home() {
 
             <View style={styles.statsBoxContainer}>
               {statBoxes.map((box, idx) => {
-                if (box.label === 'Session Avg BPM') {
+                if (box.icon === 'heart-outline') {
                   return (
                     <TouchableOpacity
                       key={idx}
