@@ -33,7 +33,7 @@ export default function Home() {
   const [sleepDataRaw, setSleepDataRaw] = useState([]);
   const [stepsData, setStepsData] = useState([]);
   const [exerciseDataRaw, setExerciseDataRaw] = useState([]);
-  const [exerSession, setExerSession] = useState("No recent activities for today");
+  const [exerSession, setExerSession] = useState("No recent activities");
   const [exerType, setExerType] = useState("None");
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState("0 hours and 0 minutes");
@@ -103,23 +103,16 @@ export default function Home() {
         console.warn('Health Connect init error:', hcInitError);
       }
 
-      const now = new Date();
-      const isSameDay = (d1: Date, d2: Date) =>
-        d1.getFullYear() === d2.getFullYear() &&
-        d1.getMonth() === d2.getMonth() &&
-        d1.getDate() === d2.getDate();
-
       let lastExerciseSession: any = null;
-      // Only consider exercises recorded for today
-      const todayExercises = (exerciseSession || []).filter((record: any) => {
+      // Use the most recent exercise session regardless of date
+      const allExercises = (exerciseSession || []).filter((record: any) => {
         const time = record?.endTime || record?.startTime;
-        if (!time) return false;
-        return isSameDay(new Date(time), now);
+        return !!time;
       });
 
-      if (todayExercises.length > 0) {
-        setExerciseDataRaw(todayExercises);
-        const sortedExercise = [...todayExercises].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+      if (allExercises.length > 0) {
+        setExerciseDataRaw(allExercises);
+        const sortedExercise = [...allExercises].sort((a, b) => new Date(b.endTime || b.startTime).getTime() - new Date(a.endTime || a.startTime).getTime());
         const lastExercise = sortedExercise[0];
         lastExerciseSession = lastExercise;
         const start = new Date(lastExercise.startTime);
@@ -151,7 +144,7 @@ export default function Home() {
         setExerType(exerciseName || 'Exercise');
       } else {
         setExerciseDataRaw([]);
-        setExerSession("No recent activities for today");
+        setExerSession("No recent activities");
         setExerType("None");
       }
 
@@ -200,11 +193,8 @@ export default function Home() {
 
         const sortedSleep = [...sleep].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
 
-        // Check if there are sessions ending today (local calendar date)
-        let relevantSessions = sortedSleep.filter((s: any) => {
-          if (!s?.endTime) return false;
-          return isSameDay(new Date(s.endTime), now);
-        });
+        // Use the most recent sleep sessions regardless of date
+        let relevantSessions = sortedSleep.filter((s: any) => !!s?.endTime);
 
         if (relevantSessions.length > 0) {
           lastSleepSession = relevantSessions[0];
@@ -313,8 +303,8 @@ export default function Home() {
       setHeartRateData(heartRate || []);
       if (heartRate && heartRate.length > 0) {
         const allSamples = heartRate.flatMap(record => (record?.samples && Array.isArray(record.samples)) ? record.samples : []).filter(Boolean);
-        // Only consider heart rate samples recorded for today
-        const validSamples = allSamples.filter(sample => sample?.time && isSameDay(new Date(sample.time), now) && typeof sample.beatsPerMinute === 'number');
+        // Use all heart rate samples regardless of date
+        const validSamples = allSamples.filter(sample => sample?.time && typeof sample.beatsPerMinute === 'number');
 
         if (validSamples.length > 0) {
           let mostRecentSession: any = null;
@@ -421,28 +411,28 @@ export default function Home() {
 
   const statBoxes = [
     {
-      label: hasExerciseToday ? exerSession : 'No recent activities for today',
+      label: hasExerciseToday ? exerSession : 'No recent activities',
       value: hasExerciseToday ? exerType : 'None',
       unit: '',
       icon: 'barbell-outline',
       color: '#ff8c42',
     },
     {
-      label: hasStepsToday ? 'Total Steps Today' : 'total steps for today',
+      label: hasStepsToday ? 'Latest Total Steps' : 'latest total steps',
       value: totalSteps,
       unit: '',
       icon: 'walk-outline',
       color: '#43e97b',
     },
     {
-      label: hasSleepToday ? 'Hours of Sleep' : 'of sleep for today',
+      label: hasSleepToday ? 'Latest Sleep Hours' : 'latest sleep hours',
       value: totalSleepHours,
       unit: '',
       icon: 'moon-outline',
       color: '#5d3fd3',
     },
     {
-      label: hasHeartRateToday ? 'Session Avg BPM' : 'session avg BPM',
+      label: hasHeartRateToday ? 'Latest Session Avg BPM' : 'latest session avg BPM',
       value: latestHeartRate,
       unit: 'BPM',
       icon: 'heart-outline',
