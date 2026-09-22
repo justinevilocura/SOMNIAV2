@@ -199,30 +199,28 @@ export default function Home() {
         if (relevantSessions.length > 0) {
           lastSleepSession = relevantSessions[0];
 
-          // Sum sleep duration across all relevant sessions for today (excluding AWAKE stage 1)
+          // Only use the SINGLE most recent session for duration (avoid summing multiple nights)
+          const latestSession = lastSleepSession;
           let totalSleepMs = 0;
-          relevantSessions.forEach((session: any) => {
-            let sessionSleepMs = 0;
-            if (session?.stages && session.stages.length > 0) {
-              session.stages.forEach((stage: any) => {
-                if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
-                  const stageStart = new Date(stage.startTime).getTime();
-                  const stageEnd = new Date(stage.endTime).getTime();
-                  if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
-                    sessionSleepMs += (stageEnd - stageStart);
-                  }
+          if (latestSession?.stages && latestSession.stages.length > 0) {
+            latestSession.stages.forEach((stage: any) => {
+              if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
+                const stageStart = new Date(stage.startTime).getTime();
+                const stageEnd = new Date(stage.endTime).getTime();
+                if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
+                  totalSleepMs += (stageEnd - stageStart);
                 }
-              });
-            }
-            if (sessionSleepMs === 0 && session?.startTime && session?.endTime) {
-              const start = new Date(session.startTime);
-              const end = new Date(session.endTime);
-              if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-                sessionSleepMs = Math.max(0, end.getTime() - start.getTime());
               }
+            });
+          }
+          // Fallback: if no stages, use session start/end
+          if (totalSleepMs === 0 && latestSession?.startTime && latestSession?.endTime) {
+            const start = new Date(latestSession.startTime);
+            const end = new Date(latestSession.endTime);
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+              totalSleepMs = Math.max(0, end.getTime() - start.getTime());
             }
-            totalSleepMs += sessionSleepMs;
-          });
+          }
 
           const totalMinutes = Math.floor(totalSleepMs / (1000 * 60));
           const hours = Math.floor(totalMinutes / 60);
@@ -230,12 +228,10 @@ export default function Home() {
           const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
           setTotalSleepHours(formattedSleep);
 
-          // Sleep Graph: extract stages from today's relevant sessions
+          // Sleep Graph: extract stages from the single most recent session only
           const labels: string[] = [];
           const data: number[] = [];
-          const sleepStages = relevantSessions
-            .flatMap((session: any) => session?.stages || [])
-            .filter(Boolean);
+          const sleepStages = (latestSession?.stages || []).filter(Boolean);
 
           // Sort stages chronologically so the graph flows in order from earliest to latest
           sleepStages.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
