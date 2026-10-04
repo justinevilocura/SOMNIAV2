@@ -259,7 +259,7 @@ export const sendResetOtp = async (req, res) => {
             method: 'POST',
             headers: {
                 'accept': 'application/json',
-                'api-key': process.env.SMTP_PASS, // Brevo SMTP_PASS is also the API Key
+                'api-key': process.env.BREVO_API_KEY,
                 'content-type': 'application/json'
             },
             body: JSON.stringify(emailData)
