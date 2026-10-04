@@ -10,6 +10,9 @@
       "node": "20.11.1",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://somniav2-production.up.railway.app"
+      },
+      "android": {
+        "buildType": "apk"
       }
     },
     "preview": {
