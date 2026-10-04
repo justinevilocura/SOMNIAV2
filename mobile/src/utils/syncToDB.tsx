@@ -101,7 +101,7 @@ export const syncToDB = async (
         // Steps
         const stepsPayload = (steps || []).map((record) => ({
             userId: userID,
-            id: record.metadata?.id || String(Date.now()),
+            id: record.metadata?.id || `step-${userID}-${record.startTime}-${record.endTime}`,
             lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
@@ -121,7 +121,7 @@ export const syncToDB = async (
         if (exerciseSession && exerciseSession.length > 0) {
             const exercisePayload = exerciseSession.map((record) => ({
                 userId: userID,
-                id: record.metadata?.id || String(Date.now()),
+                id: record.metadata?.id || `exercise-${userID}-${record.startTime}-${record.endTime}`,
                 lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
                 startTime: record.startTime,
                 endTime: record.endTime,
