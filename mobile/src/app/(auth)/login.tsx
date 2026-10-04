@@ -7,11 +7,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../../assets/styles/login.styles';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -32,46 +27,13 @@ export default function Login() {
     const router = useRouter();
     const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
-    // ─── Google Sign-In ────────────────────────────────────────────────
-    const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-        clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-        scopes: ['profile', 'email'],
-    });
-
-    useEffect(() => {
-        if (googleResponse?.type === 'success') {
-            const { access_token } = googleResponse.authentication!;
-            handleGoogleBackendLogin(access_token);
-        }
-    }, [googleResponse]);
-
-    const handleGoogleBackendLogin = async (accessToken: string) => {
-        setIsLoading(true);
-        try {
-            const response = await axios.post(`${backendUrl}/api/auth/google`,
-                { accessToken },
-                { timeout: 15000 }
-            );
-            if (response.data.success) {
-                const { token, user_id } = response.data;
-                await AsyncStorage.setItem('token', token);
-                await AsyncStorage.setItem('authData', JSON.stringify({
-                    token,
-                    timestamp: new Date().getTime(),
-                    isAuthenticated: true,
-                    user_id,
-                }));
-                Toast.show({ type: 'success', text1: 'Welcome!', text2: 'Signed in with Google.' });
-                router.replace('/home');
-            } else {
-                Toast.show({ type: 'error', text1: 'Google Login Failed', text2: response.data.message });
-            }
-        } catch (error: any) {
-            Toast.show({ type: 'error', text1: 'Error', text2: 'Could not sign in with Google.' });
-        } finally {
-            setIsLoading(false);
-        }
+    // ─── Google Sign-In (requires new APK build with expo-web-browser) ───
+    const handleGoogleLogin = () => {
+        Toast.show({
+            type: 'info',
+            text1: 'Rebuild Required',
+            text2: 'Google Sign-In will be available in the next app build.',
+        });
     };
 
     // Load saved credentials on mount
@@ -277,8 +239,7 @@ export default function Login() {
                 <View style={styles.socialRow}>
                     <TouchableOpacity
                         style={[styles.socialBtnFull, { marginRight: 6 }]}
-                        onPress={() => promptGoogleAsync()}
-                        disabled={!googleRequest || isLoading}
+                        onPress={handleGoogleLogin}
                     >
                         <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
                         <Text style={styles.socialBtnText}>Google</Text>
