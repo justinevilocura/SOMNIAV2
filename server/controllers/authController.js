@@ -232,7 +232,7 @@ export const sendResetOtp = async(req,res)=>{
         const user = await userModel.findOne({email});
         
         if(!user){
-            res.json({success: false, message: "User not found!"});
+            return res.json({success: false, message: "User not found!"});
         }
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
@@ -252,6 +252,7 @@ export const sendResetOtp = async(req,res)=>{
     res.json({ success: true, message: "Otp sent to your email" });
 
     } catch (error) {
+        console.error('sendResetOtp error:', error.message, error.code || '');
         res.json({ success: false, message: error.message });
 
     }
