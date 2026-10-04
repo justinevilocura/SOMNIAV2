@@ -260,6 +260,7 @@ export const sendResetOtp = async (req, res) => {
         res.json({ success: true, message: "Otp sent to your email" });
 
     } catch (error) {
+        console.error('sendResetOtp error:', error.message, error.code || '');
         res.json({ success: false, message: error.message });
 
     }
