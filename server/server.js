@@ -30,8 +30,8 @@ const allowedOrigins = [
     'http://192.168.254.142:4000',
     'http://172.20.10.2:4000',
     'https://somniav2-production.up.railway.app',
-    'https://somnia-17eu.onrender.com',
-    'https://somnia-api-iuvq.onrender.com',  // Replace with your LAN IP if using physical device
+    'https://som-ni-a.vercel.app',   // Deployed frontend
+    'https://somniav-2.vercel.app',  // Deployed frontend (alternate)
 ];
 
 
@@ -40,7 +40,7 @@ app.use(cors({
         // Allow requests with no origin (like mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
 
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
             callback(null, true);
         } else {
             console.log('Blocked by CORS:', origin);
