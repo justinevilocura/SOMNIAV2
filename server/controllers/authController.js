@@ -305,3 +305,66 @@ export const resetPassword = async (req,res) =>{
         return res.json({success: false, message: error.message});
     }
 }
+
+// ─── Google OAuth Login ─────────────────────────────────────────────────────
+export const googleLogin = async (req, res) => {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+        return res.json({ success: false, message: 'Google access token is required' });
+    }
+
+    try {
+        // Verify token with Google and get user info
+        const googleRes = await fetch(
+            `https://www.googleapis.com/oauth2/v3/userinfo`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        if (!googleRes.ok) {
+            return res.json({ success: false, message: 'Invalid Google token' });
+        }
+
+        const googleUser = await googleRes.json();
+        const { email, name, sub: googleId } = googleUser;
+
+        if (!email) {
+            return res.json({ success: false, message: 'Could not retrieve email from Google' });
+        }
+
+        // Find existing user or create new one
+        let user = await userModel.findOne({ email });
+
+        if (!user) {
+            // Create new user from Google data
+            const randomPassword = await bcrypt.hash(googleId + process.env.JWT_SECRET, 10);
+            user = new userModel({
+                name: name || email.split('@')[0],
+                email,
+                password: randomPassword,
+                birthdate: new Date(),
+                gender: 'Prefer not to say',
+                isAccountVerified: true, // Google already verified the email
+            });
+            await user.save();
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        return res.json({
+            success: true,
+            token,
+            user_id: user._id,
+            message: 'Google login successful'
+        });
+
+    } catch (error) {
+        console.error('googleLogin error:', error.message);
+        return res.json({ success: false, message: error.message });
+    }
+}
