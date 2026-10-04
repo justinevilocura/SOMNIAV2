@@ -237,10 +237,17 @@ export const sendResetOtp = async (req, res) => {
 
 
     try {
+<<<<<<< Updated upstream
         const user = await userModel.findOne({ email });
 
         if (!user) {
             res.json({ success: false, message: "User not found!" });
+=======
+        const user = await userModel.findOne({email});
+        
+        if(!user){
+            return res.json({success: false, message: "User not found!"});
+>>>>>>> Stashed changes
         }
 
         const otp = String(Math.floor(100000 + Math.random() * 900000));
