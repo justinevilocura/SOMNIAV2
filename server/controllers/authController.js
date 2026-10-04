@@ -248,15 +248,29 @@ export const sendResetOtp = async (req, res) => {
         user.resetOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
         await user.save();
 
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
-            to: user.email,
+        const emailData = {
+            sender: { email: process.env.SENDER_EMAIL },
+            to: [{ email: user.email }],
             subject: 'Password Reset OTP.',
-            text: `Your OTP for resetting your password is ${otp} 
-        Use this OTP to proceed with resetting your password.`
+            textContent: `Your OTP for resetting your password is ${otp} \nUse this OTP to proceed with resetting your password.`
         };
 
-        await transporter.sendMail(mailOptions);
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': process.env.SMTP_PASS, // Brevo SMTP_PASS is also the API Key
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify(emailData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Brevo API Error:', errorData);
+            throw new Error('Failed to send email via API');
+        }
+
         res.json({ success: true, message: "Otp sent to your email" });
 
     } catch (error) {
