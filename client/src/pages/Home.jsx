@@ -351,7 +351,7 @@ const Home = () => {
 
                   <div className="space-y-3">
                     <a
-                      href="https://expo.dev/accounts/jscvilocura/projects/somnia/builds/aa123f55-8ed7-4783-be7b-dc0e665c662c"
+                      href="https://expo.dev/accounts/jscvilocura/projects/somnia/builds/bb45bb96-77fc-4c81-9527-863b684b4f47"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl font-medium text-sm flex items-center justify-center space-x-2 transition-all shadow-lg shadow-blue-500/20"
