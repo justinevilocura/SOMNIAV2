@@ -549,7 +549,7 @@ const SleepHistoryView = () => {
             <h3 className="text-lg text-white font-light mb-4">
               Recent Sleep Sessions
             </h3>
-            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
               {sleepHistory.recentSessions.map((session, index) => (
                 <div
                   key={session.id || index}
