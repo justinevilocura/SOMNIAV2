@@ -10,7 +10,7 @@ import BloodPressure from "../models/bloodPressureModels.js";
 import SpO2 from "../models/spo2Model.js"; // ⬅️ NEW
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
-const SEQ_LEN = 21; // must match your FastAPI SEQ_LEN
+const SEQ_LEN = 14; // Must match your FastAPI SEQ_LEN
 
 //-----------------------------------------------------
 // Helper: format a date into YYYY-MM-DD

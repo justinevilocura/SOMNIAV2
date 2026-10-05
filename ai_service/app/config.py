@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # How many days your sequence uses (match your training)
-SEQ_LEN = int(os.getenv("SEQ_LEN", "21"))
+SEQ_LEN = int(os.getenv("SEQ_LEN", "14"))
 
 # === DAILY FEATURES COMING FROM NODE BACKEND ===
 # These MUST match the JSON that Node sends AND the columns used to train your model.
