@@ -106,6 +106,7 @@ export const syncToDB = async (
             startTime: record.startTime,
             endTime: record.endTime,
             count: record.count || 0,
+            dataOrigin: record.metadata?.dataOrigin || "unknown",
         }));
 
         if (stepsPayload.length > 0) {

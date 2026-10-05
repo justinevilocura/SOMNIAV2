@@ -7,6 +7,7 @@ const stepSchema = new mongoose.Schema({
   count:             { type: Number, required: true, min: 0 },
   startTime:         { type: Date, required: true },
   endTime:           { type: Date, required: true },
+  dataOrigin:        { type: String, default: "unknown" },
 }, {
   timestamps: true,
 });
