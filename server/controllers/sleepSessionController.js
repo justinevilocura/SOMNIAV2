@@ -46,7 +46,7 @@ export const addSleepSession = async (req, res) => {
 // NEW FUNCTION: Get only the latest sleep session
 export const getLatestSleepSession = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.user?.id || req.user?._id || req.user?.userId;
     
     if (!userId) {
       return res.status(401).json({ 
@@ -149,7 +149,7 @@ export const getLatestSleepSession = async (req, res) => {
 
 export const getSleepSessions = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.user?.id || req.user?._id || req.user?.userId;
     
     if (!userId) {
       return res.status(401).json({ 
@@ -237,7 +237,7 @@ export const getSleepSessions = async (req, res) => {
 
 export const getDetailedSleepStats = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.user?.id || req.user?._id || req.user?.userId;
     
     if (!userId) {
       return res.status(401).json({ 
@@ -267,7 +267,7 @@ export const getDetailedSleepStats = async (req, res) => {
 
 export const getSleepHistory = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.user?.id || req.user?._id || req.user?.userId;
     
     if (!userId) {
       return res.status(401).json({ 
