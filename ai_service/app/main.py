@@ -70,10 +70,10 @@ app = FastAPI(title=SERVICE_NAME)
 # Helper: convert request → tensor for model
 # ---------------------------------------------------------
 def request_to_tensor(req: PredictRequest) -> torch.Tensor:
-    if len(req.days) != SEQ_LEN:
+    if len(req.days) == 0:
         raise HTTPException(
             status_code=400,
-            detail=f"You must send exactly {SEQ_LEN} days, got {len(req.days)}",
+            detail="You must send at least 1 day of data",
         )
 
     seq = []

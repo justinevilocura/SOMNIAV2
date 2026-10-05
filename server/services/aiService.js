@@ -351,27 +351,34 @@ export async function buildDailyFeatures(userId, seqLen = SEQ_LEN) {
     daysPayload.push(dayData);
   }
 
-  const trimmedDays = daysPayload.slice(-seqLen);
+  const MIN_DAYS = 5;
+  const IDEAL_DAYS = 14;
+  const trimmedDays = daysPayload.slice(-IDEAL_DAYS);
 
-  if (trimmedDays.length < seqLen) {
+  if (trimmedDays.length < MIN_DAYS) {
     console.log(
-      "[AI] Not enough days. Needed:",
-      seqLen,
+      "[AI] Not enough days. Needed min:",
+      MIN_DAYS,
       "but have:",
       trimmedDays.length
     );
     return {
       insufficientData: true,
-      message: `Insufficient days of data. Need ${SEQ_LEN} days, only have ${trimmedDays.length}.`,
+      message: `Insufficient days of data. Need at least ${MIN_DAYS} days to generate a baseline prediction (ideal is ${IDEAL_DAYS} days), but only have ${trimmedDays.length}.`,
       days: null,
     };
+  }
+
+  let warningMessage = null;
+  if (trimmedDays.length < IDEAL_DAYS) {
+    warningMessage = `Prediction generated using ${trimmedDays.length} days of data. This is not as accurate as a full ${IDEAL_DAYS}-day sleep pattern analysis. Keep syncing your data for better accuracy!`;
   }
 
   console.log("[AI] Built days payload length:", trimmedDays.length);
 
   return {
     insufficientData: false,
-    message: null,
+    message: warningMessage,
     days: trimmedDays,
   };
 }
