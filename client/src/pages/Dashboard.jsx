@@ -220,7 +220,7 @@ const SleepHistoryView = () => {
       averageSleepTime: Math.round(averageSleepTime * 10) / 10,
       sleepEfficiency,
       deepSleepHours: Math.round(averageDeepSleep * 10) / 10,
-      recentSessions: recentSessions.slice(0, 10), // Last 10 sessions
+      recentSessions, // All recent sessions
       weeklyPattern,
     };
   };
@@ -549,8 +549,8 @@ const SleepHistoryView = () => {
             <h3 className="text-lg text-white font-light mb-4">
               Recent Sleep Sessions
             </h3>
-            <div className="space-y-3 max-h-40 overflow-y-auto">
-              {sleepHistory.recentSessions.slice(0, 5).map((session, index) => (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+              {sleepHistory.recentSessions.map((session, index) => (
                 <div
                   key={session.id || index}
                   className="flex justify-between items-center py-2 border-b border-gray-700/30 last:border-b-0"
