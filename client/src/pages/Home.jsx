@@ -205,18 +205,18 @@ const Home = () => {
                 </div>
               </button>
 
-              {/* App Store / iOS Button (Coming Soon) */}
+              {/* App Store / iOS Button */}
               <button
-                disabled
-                className="w-full sm:w-auto min-w-[210px] px-6 py-3.5 bg-[#0B1528] border border-gray-700/80 rounded-2xl flex items-center justify-center space-x-3 transition-all duration-300 shadow-lg shadow-black/40 opacity-70 cursor-not-allowed"
+                onClick={() => openDownload('ios')}
+                className="w-full sm:w-auto min-w-[210px] px-6 py-3.5 bg-[#0B1528] hover:bg-[#121F38] border border-gray-700/80 hover:border-blue-500/60 rounded-2xl flex items-center justify-center space-x-3 transition-all duration-300 transform hover:scale-[1.03] shadow-lg shadow-black/40 group"
               >
                 {/* Apple Icon */}
-                <svg className="w-7 h-7 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="w-7 h-7 text-white group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 0.93-2.85-.9.04-2 .6-2.64 1.35-.56.65-.95 1.72-.82 2.74 1.01.08 1.91-.49 2.53-1.24z" />
                 </svg>
                 <div className="text-left">
-                  <div className="text-[11px] text-gray-500 font-light uppercase tracking-wider leading-none">Coming Soon</div>
-                  <div className="text-base font-semibold text-gray-400 tracking-wide">iOS App</div>
+                  <div className="text-[11px] text-gray-400 font-light uppercase tracking-wider leading-none">Get it on</div>
+                  <div className="text-base font-semibold text-white tracking-wide">App Store / TestFlight</div>
                 </div>
               </button>
 
@@ -378,18 +378,15 @@ const Home = () => {
                   </p>
 
                   <div className="space-y-3">
-                    <a
-                      href="https://testflight.apple.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-medium text-sm flex items-center justify-center space-x-2 transition-all shadow-lg shadow-blue-500/20"
+                    <button
+                      disabled
+                      className="w-full py-3 px-4 bg-gray-800/80 text-gray-400 rounded-xl font-medium text-sm flex items-center justify-center space-x-2 border border-gray-700/50 cursor-not-allowed"
                     >
-                      <span>Join Apple TestFlight Beta</span>
-                      <ArrowTopRightOnSquareIcon className="w-5 h-5" />
-                    </a>
+                      <span>Coming Soon</span>
+                    </button>
 
                     <div className="bg-gray-800/40 border border-gray-700/60 rounded-xl p-3 text-xs text-gray-400">
-                      <strong className="text-gray-300">How to install:</strong> Download the official TestFlight app from the App Store, then click the link above to accept your invite.
+                      <strong className="text-gray-300">Status:</strong> The iOS version of SOMNiA is currently in active development. Please check back later for the TestFlight beta release.
                     </div>
                   </div>
                 </div>
