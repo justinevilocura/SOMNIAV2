@@ -83,19 +83,22 @@ export const syncToDB = async (
         // Steps
         const stepsPayload = steps.map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || `step-${userID}-${record.startTime}-${record.endTime}`,
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
-            count: record.count,
+            count: record.count || 0,
+            dataOrigin: record.metadata?.dataOrigin || "unknown",
         }));
 
-        const stepsResponse = await fetch(`${backendUrl}/api/step/addStep`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(stepsPayload),
-        });
-        await handleResponse(stepsResponse, "steps");
+        if (stepsPayload.length > 0) {
+            const stepsResponse = await fetch(`${backendUrl}/api/step/addStep`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(stepsPayload),
+            });
+            await handleResponse(stepsResponse, "steps");
+        }
 
         console.log("Health data synced successfully.");
     } catch (error) {

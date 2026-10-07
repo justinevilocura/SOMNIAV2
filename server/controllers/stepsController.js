@@ -9,9 +9,9 @@ export const addStepData = async (req, res) => {
  
   try {
     for (const step of steps) {
-      const { id, lastModifiedTime, count, startTime, endTime, userId } = step;
+      const { id, lastModifiedTime, count, startTime, endTime, userId, dataOrigin } = step;
 
-      if (!id || !lastModifiedTime || !count || !startTime || !endTime || !userId) {
+      if (!id || !lastModifiedTime || count === undefined || !startTime || !endTime || !userId) {
         return res.status(400).json({ success: false, message: 'Missing required details in one or more steps' });
       }
 
@@ -24,6 +24,7 @@ export const addStepData = async (req, res) => {
           count,
           startTime: new Date(startTime),
           endTime: new Date(endTime),
+          dataOrigin: dataOrigin || "unknown",
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -87,10 +88,18 @@ export const getStepStats = async (req, res) => {
     console.log(`Found ${todayStepData.length} step records for today`);
     console.log(`Found ${allStepData.length} total step records for average calculation`);
 
-    // Calculate today's total steps
-    let totalStepsToday = 0;
+    // Calculate today's total steps by source and pick the dominant one
+    const todayStepsBySource = {};
     todayStepData.forEach((record) => {
-      totalStepsToday += record.count || 0;
+      const origin = record.dataOrigin || "unknown";
+      if (!todayStepsBySource[origin]) todayStepsBySource[origin] = 0;
+      todayStepsBySource[origin] += record.count || 0;
+    });
+    
+    // Default to 0, then find the max across sources
+    let totalStepsToday = 0;
+    Object.values(todayStepsBySource).forEach(count => {
+      if (count > totalStepsToday) totalStepsToday = count;
     });
 
     // Calculate overall average from all historical data
@@ -116,9 +125,16 @@ export const getStepStats = async (req, res) => {
       }
     });
 
-    let totalStepsYesterday = 0;
+    const yesterdayStepsBySource = {};
     yesterdayStepData.forEach((record) => {
-      totalStepsYesterday += record.count || 0;
+      const origin = record.dataOrigin || "unknown";
+      if (!yesterdayStepsBySource[origin]) yesterdayStepsBySource[origin] = 0;
+      yesterdayStepsBySource[origin] += record.count || 0;
+    });
+
+    let totalStepsYesterday = 0;
+    Object.values(yesterdayStepsBySource).forEach(count => {
+      if (count > totalStepsYesterday) totalStepsYesterday = count;
     });
 
     // Handle case when no data exists
