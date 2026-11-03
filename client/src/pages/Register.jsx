@@ -17,7 +17,13 @@ import {
 
 const Register = () => {
   const navigate = useNavigate();
-  const { backendUrl } = useContext(AppContext);
+  const { backendUrl, isLoggedin } = useContext(AppContext);
+
+  React.useEffect(() => {
+    if (isLoggedin) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isLoggedin, navigate]);
   const [isLoading, setIsLoading] = useState(false);
 
   const [formData, setFormData] = useState({

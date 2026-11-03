@@ -12,7 +12,13 @@ import logo from '../assets/SOMNiA_LOGO.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { backendUrl, checkAuthAndGetUserData } = useContext(AppContext);
+  const { backendUrl, checkAuthAndGetUserData, isLoggedin } = useContext(AppContext);
+
+  React.useEffect(() => {
+    if (isLoggedin) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isLoggedin, navigate]);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
@@ -53,7 +59,7 @@ const Login = () => {
         }
         await checkAuthAndGetUserData();
         toast.success('Login successful!');
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
       } else {
         toast.error(data.message);
       }
