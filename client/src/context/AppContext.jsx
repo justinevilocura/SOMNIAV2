@@ -26,7 +26,8 @@ export const AppContextProvider = (props) => {
     try {
       setIsLoading(true);
 
-      const savedToken = localStorage.getItem('token');
+      // Check localStorage (rememberMe) then sessionStorage (session-only login)
+      const savedToken = localStorage.getItem('token') || sessionStorage.getItem('token');
       const authHeaders = savedToken ? { Authorization: `Bearer ${savedToken}` } : {};
 
       // 1. Check auth
@@ -96,6 +97,8 @@ export const AppContextProvider = (props) => {
         setIsLoggedin(false);
         setUserData(null);
         localStorage.removeItem('token');
+        localStorage.removeItem('rememberedEmail');
+        sessionStorage.removeItem('token');
         delete axios.defaults.headers.common['Authorization'];
         sessionStorage.clear();
         window.location.replace("/");
@@ -110,7 +113,8 @@ export const AppContextProvider = (props) => {
 
   // Initial auth + user load on app mount
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
+    // Check localStorage (rememberMe) then sessionStorage (session-only)
+    const savedToken = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (savedToken) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
     }

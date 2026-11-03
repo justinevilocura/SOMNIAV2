@@ -81,7 +81,7 @@ export const register = async (req, res) => {
 
 
 export const login = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     if (!email || !password) {
         return res.status(400).json({ success: false, message: 'Required details missing' });
@@ -100,27 +100,26 @@ export const login = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid password' });
         }
 
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-        /*
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'None',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-        */
+        // Token expiry: 7 days if rememberMe, 1 day if not
+        const tokenExpiry = rememberMe ? '7d' : '1d';
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: tokenExpiry });
 
         const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER) || Boolean(process.env.RAILWAY_ENVIRONMENT) || (req.headers.origin && req.headers.origin.includes('vercel.app'));
 
-        res.cookie('token', token, {
+        const cookieOptions = {
             httpOnly: true,
             secure: isProd,
             sameSite: isProd ? 'None' : 'Strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
+        };
 
-        return res.status(200).json({ success: true, message: "Login successful", token, user_id: user._id });
+        // Set persistent cookie (7 days) if rememberMe, session cookie if not
+        if (rememberMe) {
+            cookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000;
+        }
+
+        res.cookie('token', token, cookieOptions);
+
+        return res.status(200).json({ success: true, message: "Login successful", token, rememberMe: Boolean(rememberMe), user_id: user._id });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });

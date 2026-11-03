@@ -29,12 +29,6 @@ const Login = () => {
     e.preventDefault();
     try {
       setIsLoading(true);
-      
-      if (formData.rememberMe) {
-        localStorage.setItem('rememberedEmail', formData.email);
-      } else {
-        localStorage.removeItem('rememberedEmail');
-      }
 
       const { data } = await axios.post(
         `${backendUrl}/api/auth/login`,
@@ -44,7 +38,17 @@ const Login = () => {
 
       if (data.success) {
         if (data.token) {
-          localStorage.setItem('token', data.token);
+          if (data.rememberMe) {
+            // Persist token across browser sessions
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('rememberedEmail', formData.email);
+            sessionStorage.removeItem('token');
+          } else {
+            // Token lives only for this browser session
+            sessionStorage.setItem('token', data.token);
+            localStorage.removeItem('token');
+            localStorage.removeItem('rememberedEmail');
+          }
           axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
         }
         await checkAuthAndGetUserData();
@@ -76,10 +80,10 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#0A1628]">
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-transparent to-gray-900/50" />
-      
+
       {/* Medical cross pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.03]" 
+      <div
+        className="absolute inset-0 opacity-[0.03]"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0v60M60 30H0' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E")`,
           backgroundSize: '30px 30px'
@@ -88,7 +92,7 @@ const Login = () => {
 
       {/* Radial gradient for depth */}
       <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-gray-900/80" />
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
