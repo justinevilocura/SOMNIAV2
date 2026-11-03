@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -9,10 +9,13 @@ import {
   KeyIcon,
 } from '@heroicons/react/24/outline';
 import logo from '../assets/SOMNiA_LOGO.png';
+import { AppContext } from '../context/AppContext';
 
 const ResetPassword = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1); // 1: Email, 2: OTP, 3: New Password
+  const { backendUrl } = useContext(AppContext);
+  // 2-step flow: Step 1 = Email, Step 2 = OTP + New Password
+  const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -35,12 +38,13 @@ const ResetPassword = () => {
     setPasswords({ ...passwords, [e.target.name]: e.target.value });
   };
 
+  // Step 1: Send OTP to email
   const handleSubmitEmail = async (e) => {
     e.preventDefault();
     try {
       setIsLoading(true);
-      const { data } = await axios.post('/api/auth/forgot-password', { email });
-      
+      const { data } = await axios.post(`${backendUrl}/api/auth/send-reset-otp`, { email });
+
       if (data.success) {
         toast.success('Reset code sent to your email!');
         setStep(2);
@@ -54,33 +58,14 @@ const ResetPassword = () => {
     }
   };
 
-  const handleSubmitOTP = async (e) => {
+  // Step 2: Verify OTP and reset password in one call
+  const handleResetPassword = async (e) => {
     e.preventDefault();
     const otpString = otp.join('');
     if (otpString.length !== 6) {
-      toast.error('Please enter a valid OTP');
+      toast.error('Please enter a valid 6-digit OTP');
       return;
     }
-
-    try {
-      setIsLoading(true);
-      const { data } = await axios.post('/api/auth/verify-reset-otp', { email, otp: otpString });
-      
-      if (data.success) {
-        toast.success('OTP verified successfully!');
-        setStep(3);
-      } else {
-        toast.error(data.message);
-      }
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Invalid OTP');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
     if (passwords.password !== passwords.confirmPassword) {
       toast.error('Passwords do not match');
       return;
@@ -88,11 +73,12 @@ const ResetPassword = () => {
 
     try {
       setIsLoading(true);
-      const { data } = await axios.post('/api/auth/reset-password', {
+      const { data } = await axios.post(`${backendUrl}/api/auth/reset-password`, {
         email,
-        password: passwords.password,
+        otp: otpString,
+        newPassword: passwords.password,
       });
-      
+
       if (data.success) {
         toast.success('Password reset successfully!');
         navigate('/login');
@@ -110,10 +96,10 @@ const ResetPassword = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#0A1628]">
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-transparent to-gray-900/50" />
-      
+
       {/* Medical cross pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.03]" 
+      <div
+        className="absolute inset-0 opacity-[0.03]"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0v60M60 30H0' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E")`,
           backgroundSize: '30px 30px'
@@ -122,7 +108,7 @@ const ResetPassword = () => {
 
       {/* Radial gradient for depth */}
       <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-gray-900/80" />
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -154,8 +140,7 @@ const ResetPassword = () => {
               className="text-gray-400 text-sm"
             >
               {step === 1 && 'Enter your email to receive a reset code'}
-              {step === 2 && 'Enter the 6-digit code sent to your email'}
-              {step === 3 && 'Create a new password for your account'}
+              {step === 2 && 'Enter the code sent to your email and your new password'}
             </motion.p>
           </div>
 
@@ -205,51 +190,8 @@ const ResetPassword = () => {
             </motion.form>
           )}
 
-          {/* Step 2: OTP Form */}
+          {/* Step 2: OTP + New Password Form */}
           {step === 2 && (
-            <motion.form
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              onSubmit={handleSubmitOTP}
-              className="space-y-4"
-            >
-              <div className="flex justify-center space-x-2">
-                {otp.map((data, index) => (
-                  <input
-                    key={index}
-                    type="text"
-                    maxLength="1"
-                    value={data}
-                    onChange={(e) => handleOtpChange(e.target, index)}
-                    onFocus={(e) => e.target.select()}
-                    className="w-10 h-10 text-center bg-gray-800/30 border border-gray-700/50 rounded-lg text-white text-lg focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                ))}
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 shadow-xl shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Verifying...</span>
-                  </>
-                ) : (
-                  <>
-                    <KeyIcon className="w-5 h-5" />
-                    <span>Verify Code</span>
-                  </>
-                )}
-              </button>
-            </motion.form>
-          )}
-
-          {/* Step 3: New Password Form */}
-          {step === 3 && (
             <motion.form
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -257,6 +199,27 @@ const ResetPassword = () => {
               onSubmit={handleResetPassword}
               className="space-y-4"
             >
+              {/* OTP inputs */}
+              <div>
+                <label className="block text-gray-300 text-sm font-medium mb-2">
+                  6-Digit Reset Code
+                </label>
+                <div className="flex justify-center space-x-2">
+                  {otp.map((data, index) => (
+                    <input
+                      key={index}
+                      type="text"
+                      maxLength="1"
+                      value={data}
+                      onChange={(e) => handleOtpChange(e.target, index)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-10 h-10 text-center bg-gray-800/30 border border-gray-700/50 rounded-lg text-white text-lg focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* New Password */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
                   New Password
@@ -275,6 +238,7 @@ const ResetPassword = () => {
                 </div>
               </div>
 
+              {/* Confirm Password */}
               <div>
                 <label className="block text-gray-300 text-sm font-medium mb-1">
                   Confirm New Password
@@ -305,11 +269,22 @@ const ResetPassword = () => {
                   </>
                 ) : (
                   <>
-                    <LockClosedIcon className="w-5 h-5" />
+                    <KeyIcon className="w-5 h-5" />
                     <span>Reset Password</span>
                   </>
                 )}
               </button>
+
+              {/* Resend code option */}
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-blue-400 hover:text-blue-300 text-sm"
+                >
+                  Resend code
+                </button>
+              </div>
             </motion.form>
           )}
 

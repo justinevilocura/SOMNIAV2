@@ -9,7 +9,19 @@ import ExerciseSession from "../models/exerciseModel.js";
 import BloodPressure from "../models/bloodPressureModels.js";
 import SpO2 from "../models/spo2Model.js"; // ⬅️ NEW
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+function getAiServiceUrl() {
+  let url = (process.env.AI_SERVICE_URL || "http://localhost:8000").trim();
+  // Strip enclosing quotes if accidentally pasted
+  url = url.replace(/^["']|["']$/g, "");
+  // Ensure protocol
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "https://" + url;
+  }
+  // Remove trailing slashes
+  return url.replace(/\/+$/, "");
+}
+
+const AI_SERVICE_URL = getAiServiceUrl();
 const SEQ_LEN = 14; // Must match your FastAPI SEQ_LEN
 
 //-----------------------------------------------------
@@ -387,7 +399,8 @@ export async function buildDailyFeatures(userId, seqLen = SEQ_LEN) {
 // Call FastAPI model → POST /predict
 //-----------------------------------------------------
 async function callInsomniaModel(userId, days) {
-  const url = `${AI_SERVICE_URL}/predict`;
+  const baseUrl = getAiServiceUrl();
+  const url = `${baseUrl}/predict`;
   console.log("[AI] Calling FastAPI model at:", url);
 
   const resp = await axios.post(url, {
