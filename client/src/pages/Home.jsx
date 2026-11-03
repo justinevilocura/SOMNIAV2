@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
+import { AppContext } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import NavigationBar from '../components/NavigationBar';
@@ -91,6 +92,13 @@ const BenefitCard = ({ icon: Icon, title, description }) => (
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isLoggedin } = useContext(AppContext);
+
+  useEffect(() => {
+    if (isLoggedin) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isLoggedin, navigate]);
   const [downloadModal, setDownloadModal] = useState({ open: false, platform: 'android' });
 
   const openDownload = (platform) => {
