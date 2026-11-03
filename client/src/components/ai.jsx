@@ -58,7 +58,12 @@ const AI = () => {
         );
       } else {
         setRisk(null);
-        setStatus("no-data");
+        const isError =
+          apiMessage &&
+          (apiMessage.toLowerCase().includes("error") ||
+            apiMessage.toLowerCase().includes("failed") ||
+            apiMessage.toLowerCase().includes("refused"));
+        setStatus(isError ? "error" : "no-data");
         setMessage(
           apiMessage ||
             "Insufficient data to compute insomnia risk. Keep wearing your device consistently."
@@ -169,18 +174,21 @@ const AI = () => {
               </div>
             )}
 
-            {(status === "idle" || (status === "error" && !risk)) &&
-              !isLoading && (
-                <p className="text-xs sm:text-sm text-gray-400 max-w-md">
-                  When you are ready, run the AI model to compute your current
-                  insomnia risk score.
-                </p>
-              )}
+            {status === "idle" && !isLoading && (
+              <p className="text-xs sm:text-sm text-gray-400 max-w-md">
+                When you are ready, run the AI model to compute your current
+                insomnia risk score.
+              </p>
+            )}
 
             {status === "error" && !isLoading && (
-              <p className="text-xs sm:text-sm text-red-300 max-w-md">
-                {message}
-              </p>
+              <div className="flex flex-col items-center gap-2 max-w-md">
+                <ExclamationTriangleIcon className="w-8 h-8 text-red-400" />
+                <p className="text-sm text-red-300 font-medium">
+                  Service Error
+                </p>
+                <p className="text-xs sm:text-sm text-red-200">{message}</p>
+              </div>
             )}
           </div>
 

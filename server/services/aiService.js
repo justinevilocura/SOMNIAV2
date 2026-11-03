@@ -337,7 +337,7 @@ export async function buildDailyFeatures(userId, seqLen = SEQ_LEN) {
       spo2_max: spo2Summary.spo2_max,
 
       sleep_hours: sleepSummary.total_sleep_hours,
-      sleep_score: null,
+      sleep_score: 0,
 
       steps_total: stepSummary.total_steps,
       exercise_minutes: exerciseSummary.exercise_minutes,
@@ -345,7 +345,7 @@ export async function buildDailyFeatures(userId, seqLen = SEQ_LEN) {
       bp_sys_mean: bpSummary.avg_systolic,
       bp_dia_mean: bpSummary.avg_diastolic,
 
-      stress_score: null,
+      stress_score: 0,
     };
 
     daysPayload.push(dayData);
@@ -440,10 +440,11 @@ export async function getInsomniaRisk(userId) {
       risk,
     };
   } catch (err) {
-    console.error("[AI] Error in getInsomniaRisk:", err);
+    console.error("[AI] Error in getInsomniaRisk:", err?.response?.data || err?.message || err);
+    const detail = err?.response?.data?.detail || err?.response?.data?.message || err?.message;
     return {
       insufficientData: true,
-      message: "An error occurred while computing insomnia risk.",
+      message: detail ? `AI Service Error: ${detail}` : "An error occurred while computing insomnia risk.",
       risk: null,
     };
   }

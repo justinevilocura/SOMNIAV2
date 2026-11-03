@@ -10,7 +10,8 @@ export const AppContext = createContext();
 
 export const AppContextProvider = (props) => {
   const backendUrl =
-    import.meta.env.VITE_BACKEND_URL || "https://somniav2-production.up.railway.app";
+    import.meta.env.VITE_BACKEND_URL ||
+    (import.meta.env.DEV ? "http://localhost:4000" : "https://somniav2-production.up.railway.app");
 
   const [isLoggedin, setIsLoggedin] = useState(false);
   const [userData, setUserData] = useState(null);

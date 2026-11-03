@@ -78,8 +78,13 @@ def request_to_tensor(req: PredictRequest) -> torch.Tensor:
 
     seq = []
     for d in req.days:
-        # Same order as FEATURE_NAMES coming from config
-        row = [getattr(d, name) for name in FEATURE_NAMES]
+        # Same order as FEATURE_NAMES coming from config, safely handle None/NaN
+        row = []
+        for name in FEATURE_NAMES:
+            val = getattr(d, name, None)
+            if val is None:
+                val = 0.0
+            row.append(float(val))
         seq.append(row)
 
     arr = np.array(seq, dtype=np.float32)
@@ -119,15 +124,20 @@ def health_check():
 # ---------------------------------------------------------
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
-    x = request_to_tensor(req)
+    try:
+        x = request_to_tensor(req)
 
-    with torch.no_grad():
-        logits = model(x)
-        risk = float(torch.sigmoid(logits).item())
-        risk = max(0.0, min(1.0, risk))
+        with torch.no_grad():
+            logits = model(x)
+            risk = float(torch.sigmoid(logits).item())
+            risk = max(0.0, min(1.0, risk))
 
-    return PredictResponse(
-        person_id=req.person_id,
-        insomnia_risk=risk,
-        message="Insomnia risk computed successfully.",
-    )
+        return PredictResponse(
+            person_id=req.person_id,
+            insomnia_risk=risk,
+            message="Insomnia risk computed successfully.",
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

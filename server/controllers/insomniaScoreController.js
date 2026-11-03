@@ -88,3 +88,37 @@ export async function calculateInsomniaRisk(req, res) {
     });
   }
 }
+
+
+// GET /api/ai/insomnia-risk/history
+export async function getInsomniaRiskHistory(req, res) {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+        data: [],
+      });
+    }
+
+    const history = await InsomniaRisk.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: history,
+    });
+  } catch (err) {
+    console.error("[AI] Error in getInsomniaRiskHistory:", err);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching risk history.",
+      error: err.message,
+      data: [],
+    });
+  }
+}
