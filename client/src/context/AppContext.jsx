@@ -97,7 +97,8 @@ export const AppContextProvider = (props) => {
         setIsLoggedin(false);
         setUserData(null);
         localStorage.removeItem('token');
-        localStorage.removeItem('rememberedEmail');
+        // Note: intentionally keep 'rememberedEmail' so the checkbox stays
+        // checked and email stays pre-filled on the next login
         sessionStorage.removeItem('token');
         delete axios.defaults.headers.common['Authorization'];
         sessionStorage.clear();
