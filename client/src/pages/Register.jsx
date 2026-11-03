@@ -77,10 +77,12 @@ const Register = () => {
       );
 
       if (data.success) {
-        toast.success("Registration successful! Redirecting to login...");
-        setTimeout(() => {
-          navigate("/login");
-        }, 2000);
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          axios.defaults.headers.common['Authorization'] = 'Bearer ' + data.token;
+        }
+        toast.success('Account created! Please check your email for the verification code.');
+        navigate('/verify-email', { replace: true });
       } else {
         toast.error(data.message || "Registration failed. Please try again.");
       }

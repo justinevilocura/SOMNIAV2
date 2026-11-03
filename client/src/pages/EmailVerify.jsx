@@ -55,7 +55,7 @@ const EmailVerify = () => {
         // If your app fetches user data on app load / dashboard mount,
         // just navigate – no need to call getUserData here.
         await refreshUserData();
-        navigate('/profile');
+        navigate('/dashboard', { replace: true });
       } else {
         toast.error(data.message || 'Invalid code. Please try again.');
       }
@@ -93,7 +93,7 @@ const EmailVerify = () => {
 
   useEffect(() => {
     if (isLoggedin && userData?.isAccountVerified) {
-      navigate('/profile');
+      navigate('/dashboard', { replace: true });
     }
   }, [isLoggedin, userData, navigate]);
 

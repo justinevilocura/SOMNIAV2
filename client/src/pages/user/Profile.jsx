@@ -134,33 +134,12 @@ const Profile = () => {
                       {userData.name}
                     </h2>
 
-                    {isVerified ? (
-                      <span className="px-3 py-1 bg-emerald-500/15 text-emerald-400 text-xs rounded-lg border border-emerald-500/40">
-                        Verified
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 bg-gray-500/20 text-gray-400 text-xs rounded-lg border border-gray-500/30">
-                        Not Verified
-                      </span>
-                    )}
                   </div>
                   <p className="mt-1 text-xs sm:text-sm text-gray-400">
                     Manage your personal information and account security.
                   </p>
                 </div>
               </div>
-
-              {/* Verify button (top-right on larger screens, stacked on mobile) */}
-              {!isVerified && (
-                <div className="md:self-start">
-                  <Link
-                    to="/verify-email"
-                    className="inline-flex items-center justify-center px-4 sm:px-5 py-1.5 bg-blue-500/20 text-blue-400 text-xs sm:text-sm rounded-lg border border-blue-500/40 hover:bg-blue-500/30 hover:border-blue-400/60 transition-all duration-200 font-medium"
-                  >
-                    Verify Email
-                  </Link>
-                </div>
-              )}
             </div>
 
             {/* Info grid: Email / Age / Gender */}

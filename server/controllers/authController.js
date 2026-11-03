@@ -56,7 +56,13 @@ export const register = async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
-        // Send welcome email asynchronously without blocking registration
+                // Generate 6-digit OTP for initial account verification
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        user.verifyOtp = otp;
+        user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+        await user.save();
+
+        // Send OTP verification email in background
         if (process.env.BREVO_API_KEY) {
             fetch('https://api.brevo.com/v3/smtp/email', {
                 method: 'POST',
@@ -68,20 +74,24 @@ export const register = async (req, res) => {
                 body: JSON.stringify({
                     sender: { email: process.env.SENDER_EMAIL },
                     to: [{ email: user.email }],
-                    subject: 'Welcome to SOMNiA',
-                    textContent: `Welcome to SOMNiA, ${name}! Your account has been created successfully with email: ${email}.`
+                    subject: 'Verify Your SOMNiA Account',
+                    textContent: `Welcome to SOMNiA, ${name}!
+
+Your 6-digit verification code is: ${otp}
+
+Please enter this code to verify your account and access your dashboard.`
                 })
-            }).catch(err => console.error('Failed to send welcome email via Brevo API:', err.message));
+            }).catch(err => console.error('Failed to send verification email via Brevo API:', err.message));
         } else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
             transporter.sendMail({
                 from: process.env.SENDER_EMAIL || email,
                 to: email,
-                subject: 'Welcome to SOMNiA',
-                text: `Welcome to SOMNiA. Your account has been created with email: ${email}`,
-            }).catch(mailError => console.error('Failed to send welcome email:', mailError.message));
+                subject: 'Verify Your SOMNiA Account',
+                text: `Welcome to SOMNiA, ${name}! Your verification OTP is: ${otp}`,
+            }).catch(mailError => console.error('Failed to send verification email:', mailError.message));
         }
 
-        return res.status(201).json({ success: true, message: "User registered successfully" });
+        return res.status(201).json({ success: true, message: "User registered successfully", token, user_id: user._id });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -173,14 +183,36 @@ export const sendVerifyOtp = async (req, res) => {
         user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
         await user.save();
 
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
-            to: user.email,
-            subject: 'Account Verification OTP.',
-            text: `Your OTP is ${otp}. Verify your account using this OTP.`
-        };
-
-        await transporter.sendMail(mailOptions);
+                if (process.env.BREVO_API_KEY) {
+            const emailData = {
+                sender: { email: process.env.SENDER_EMAIL },
+                to: [{ email: user.email }],
+                subject: 'Account Verification OTP',
+                textContent: `Your OTP is ${otp}. Verify your account using this OTP.`
+            };
+            const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+                method: 'POST',
+                headers: {
+                    'accept': 'application/json',
+                    'api-key': process.env.BREVO_API_KEY,
+                    'content-type': 'application/json'
+                },
+                body: JSON.stringify(emailData)
+            });
+            if (!response.ok) {
+                const errorData = await response.text();
+                console.error('Brevo API Error in sendVerifyOtp:', errorData);
+                throw new Error('Failed to send email via API');
+            }
+        } else {
+            const mailOptions = {
+                from: process.env.SENDER_EMAIL,
+                to: user.email,
+                subject: 'Account Verification OTP',
+                text: `Your OTP is ${otp}. Verify your account using this OTP.`
+            };
+            await transporter.sendMail(mailOptions);
+        }
         res.json({ success: true, message: "Verification OTP sent to email" });
 
     } catch (error) {
