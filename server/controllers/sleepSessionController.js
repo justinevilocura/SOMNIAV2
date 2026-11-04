@@ -286,11 +286,25 @@ export const getSleepHistory = async (req, res) => {
       });
     }
 
+    // Filter out redundant in-progress/duplicate sessions that are completely contained within a longer session
+    const uniqueSessions = sleepSessions.filter((sessionA, idxA) => {
+      const aStart = new Date(sessionA.startTime).getTime();
+      const aEnd = new Date(sessionA.endTime).getTime();
+      return !sleepSessions.some((sessionB, idxB) => {
+        if (idxA === idxB) return false;
+        const bStart = new Date(sessionB.startTime).getTime();
+        const bEnd = new Date(sessionB.endTime).getTime();
+        return bStart <= aStart && bEnd >= aEnd && (bEnd - bStart) > (aEnd - aStart);
+      });
+    });
+
+    console.log(`After deduplicating overlapping sessions: ${uniqueSessions.length} unique sessions`);
+
     // Calculate summary statistics
     let totalSleepMinutes = 0;
     let validSessionCount = 0;
 
-    const processedSessions = sleepSessions.map(session => {
+    const processedSessions = uniqueSessions.map(session => {
       let sessionDurationMinutes = 0;
 
       if (session.stages && session.stages.length > 0) {

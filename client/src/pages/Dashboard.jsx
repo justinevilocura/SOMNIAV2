@@ -154,8 +154,20 @@ const SleepHistoryView = () => {
       };
     }
 
+    // Filter out redundant partial/duplicate sessions that are completely contained inside another session
+    const uniqueSessions = sessions.filter((sessionA, idxA) => {
+      const aStart = new Date(sessionA.startTime).getTime();
+      const aEnd = new Date(sessionA.endTime).getTime();
+      return !sessions.some((sessionB, idxB) => {
+        if (idxA === idxB) return false;
+        const bStart = new Date(sessionB.startTime).getTime();
+        const bEnd = new Date(sessionB.endTime).getTime();
+        return bStart <= aStart && bEnd >= aEnd && (bEnd - bStart) > (aEnd - aStart);
+      });
+    });
+
     // Sort sessions by date (most recent first)
-    const sortedSessions = sessions.sort(
+    const sortedSessions = uniqueSessions.sort(
       (a, b) => new Date(b.startTime) - new Date(a.startTime)
     );
 
@@ -262,20 +274,15 @@ const SleepHistoryView = () => {
   };
 
   const calculateSessionDuration = (session) => {
-    if (session.stages && session.stages.length > 0) {
-      return session.stages.reduce((total, stage) => {
-        if (stage.stage === 1) return total; // Exclude AWAKE stage (1)
-        const duration =
-          (new Date(stage.endTime) - new Date(stage.startTime)) /
-          (1000 * 60 * 60);
-        return total + duration;
-      }, 0);
-    } else {
-      return (
-        (new Date(session.endTime) - new Date(session.startTime)) /
-        (1000 * 60 * 60)
-      );
+    if (session.durationHours !== undefined && session.durationHours !== null) {
+      return session.durationHours;
     }
+    const start = new Date(session.startTime).getTime();
+    const end = new Date(session.endTime).getTime();
+    if (!isNaN(start) && !isNaN(end) && end > start) {
+      return (end - start) / (1000 * 60 * 60);
+    }
+    return 0;
   };
 
   // Weekly pattern: fixed Mon -> Sun order for the current week
@@ -306,14 +313,35 @@ const SleepHistoryView = () => {
         return sessionDate.toDateString() === date.toDateString();
       });
 
+      // Merge overlapping intervals for this day so no time is double-counted
+      const intervals = sessionsForDay
+        .map((s) => ({
+          start: new Date(s.startTime).getTime(),
+          end: new Date(s.endTime).getTime(),
+        }))
+        .filter((int) => !isNaN(int.start) && !isNaN(int.end) && int.end > int.start)
+        .sort((a, b) => a.start - b.start);
+
       let dayDuration = 0;
+      if (intervals.length > 0) {
+        const merged = [{ ...intervals[0] }];
+        for (let j = 1; j < intervals.length; j++) {
+          const prev = merged[merged.length - 1];
+          const curr = intervals[j];
+          if (curr.start <= prev.end) {
+            prev.end = Math.max(prev.end, curr.end);
+          } else {
+            merged.push({ ...curr });
+          }
+        }
+        const totalMs = merged.reduce((sum, int) => sum + (int.end - int.start), 0);
+        dayDuration = totalMs / (1000 * 60 * 60);
+      }
+
       let qualitySum = 0;
       let qualityCount = 0;
 
       sessionsForDay.forEach((s) => {
-        const d = calculateSessionDuration(s);
-        dayDuration += d;
-
         const q = calculateSleepQuality(s);
         qualitySum += q;
         qualityCount += 1;
@@ -370,9 +398,10 @@ const SleepHistoryView = () => {
   };
 
   const formatSleepTime = (hours) => {
-    if (hours === 0) return '0h 0m';
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
+    if (!hours || hours === 0) return '0h 0m';
+    const totalMinutes = Math.round(hours * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
     return m === 0 ? `${h}h` : `${h}h ${m}m`;
   };
 
@@ -475,6 +504,7 @@ const SleepHistoryView = () => {
                   data={sleepHistory.weeklyPattern.map((d) => ({
                     day: d.day,
                     hours: d.duration ? Math.round(d.duration * 10) / 10 : 0,
+                    durationText: formatSleepTime(d.duration),
                     quality: d.quality || 0,
                   }))}
                   margin={{ top: 15, right: 10, left: -15, bottom: 5 }}
@@ -504,7 +534,7 @@ const SleepHistoryView = () => {
                         return (
                           <div className="bg-gray-900 border border-gray-700 p-3 rounded-lg shadow-xl text-xs space-y-1">
                             <p className="font-semibold text-white">{data.day}</p>
-                            <p className="text-blue-400 font-medium">Duration: {data.hours} hours</p>
+                            <p className="text-blue-400 font-medium">Duration: {data.durationText}</p>
                             {data.quality > 0 && (
                               <p className="text-emerald-400">Sleep Quality: {data.quality}%</p>
                             )}
