@@ -278,23 +278,35 @@ const SleepHistoryView = () => {
     }
   };
 
-  // Weekly pattern that sums ALL sessions per day (Sun–Sat)
+  // Weekly pattern: fixed Mon -> Sun order for the current week
   const createWeeklyPattern = (sessions) => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const now = new Date();
+    
+    // Find Monday of the current week (0 = Sun, 1 = Mon, ..., 6 = Sat)
+    const currentDayOfWeek = now.getDay();
+    // In JS: Sun=0. For Mon-start: Mon=0, Tue=1, ..., Sun=6
+    const distanceToMonday = (currentDayOfWeek + 6) % 7;
+    
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - distanceToMonday);
+    monday.setHours(0, 0, 0, 0);
+
     const pattern = [];
 
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dayName = days[date.getDay()];
+    // Loop through 7 days: Mon -> Tue -> Wed -> Thu -> Fri -> Sat -> Sun
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      const dayName = dayNames[i];
 
-      // All sessions that belong to this calendar day (using wake-up / endTime)
+      // Sessions that belong to this day (based on wake-up / endTime)
       const sessionsForDay = sessions.filter((session) => {
         const sessionDate = new Date(session.endTime || session.startTime);
         return sessionDate.toDateString() === date.toDateString();
       });
 
-      let dayDuration = 0; // total hours of sleep for this day
+      let dayDuration = 0;
       let qualitySum = 0;
       let qualityCount = 0;
 
@@ -307,8 +319,7 @@ const SleepHistoryView = () => {
         qualityCount += 1;
       });
 
-      const avgQuality =
-        qualityCount > 0 ? Math.round(qualitySum / qualityCount) : 0;
+      const avgQuality = qualityCount > 0 ? Math.round(qualitySum / qualityCount) : 0;
 
       pattern.push({
         day: dayName,
