@@ -57,12 +57,12 @@ export const getLatestSleepSession = async (req, res) => {
 
     console.log('Fetching latest sleep session for user:', userId);
 
-    // Get the most recent sleep session (sorted by startTime descending, limit 1)
-    const latestSession = await SleepSession.findOne({
+    // Get the most recent sleep sessions sorted by wake-up time (endTime descending)
+    const sessions = await SleepSession.find({
       user: userId
-    }).sort({ startTime: -1 });
+    }).sort({ endTime: -1, startTime: -1 }).limit(10);
 
-    if (!latestSession) {
+    if (!sessions || sessions.length === 0) {
       console.log('No sleep session found for user');
       return res.status(200).json({
         success: true,
@@ -75,6 +75,20 @@ export const getLatestSleepSession = async (req, res) => {
         }
       });
     }
+
+    // The most recent session is the one with the latest endTime (when the user actually woke up)
+    // If there are duplicate/partial sync records around the same time, pick the complete/longest one
+    const latestEndTime = new Date(sessions[0].endTime).getTime();
+    const candidates = sessions.filter(s => {
+      const diff = Math.abs(latestEndTime - new Date(s.endTime).getTime());
+      return diff <= 2 * 60 * 60 * 1000; // within 2 hours of latest wake-up
+    });
+
+    const latestSession = candidates.reduce((best, curr) => {
+      const bestDur = new Date(best.endTime) - new Date(best.startTime);
+      const currDur = new Date(curr.endTime) - new Date(curr.startTime);
+      return currDur > bestDur ? curr : best;
+    }, sessions[0]);
 
     console.log('Latest session found:', {
       id: latestSession.id,
