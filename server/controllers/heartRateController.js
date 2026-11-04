@@ -29,32 +29,28 @@ export const addHeartRate = async (req, res) => {
 
 export const getHeartRateStats = async (req, res) => {
   try {
-    const { userId } = req.body;
-    
+    const userId = req.user?.id || req.user?._id || req.user?.userId;
+
     if (!userId) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "User not authenticated" 
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
       });
     }
 
     console.log('Fetching heart rate data for user:', userId);
 
-    // Get all heart rate data for the user, sorted by most recent
-    const heartRateData = await HeartRate.find({
-      user: userId
-    }).sort({ startTime: -1 });
+    // Get all heart rate records for the user
+    const heartRateData = await HeartRate.find({ user: userId }).sort({ startTime: -1 });
 
-    console.log(`Found ${heartRateData.length} heart rate records`);
+    console.log('Found ' + heartRateData.length + ' heart rate records');
 
     if (!heartRateData.length) {
-      console.log('No heart rate data found for user');
       return res.status(200).json({
         success: true,
         data: {
           latestHeartRate: 0,
           latestTimestamp: null,
-          sampleCount: 0,
           trend: 'neutral',
           trendValue: '0 bpm',
           trendLabel: 'No heart rate data found'
@@ -62,136 +58,74 @@ export const getHeartRateStats = async (req, res) => {
       });
     }
 
-
-    const allSamples = heartRateData.flatMap(record => 
-      (record.samples || []).map(s => ({ ...s.toObject(), parentEndTime: record.endTime }))
-    );
-
-    // Sort all samples descending
-    const sortedSamples = allSamples.sort((a, b) => 
-      new Date(b.time || b.timestamp).getTime() - new Date(a.time || a.timestamp).getTime()
-    );
-
-    const now = new Date();
-    // Helper to check if timestamp falls on current calendar day in UTC+8 (Manila)
-    const isSameDayInTimezone = (date1, date2, tzOffsetHours = 8) => {
-      const d1 = new Date(new Date(date1).getTime() + (tzOffsetHours * 60 * 60 * 1000));
-      const d2 = new Date(new Date(date2).getTime() + (tzOffsetHours * 60 * 60 * 1000));
-      return d1.getUTCFullYear() === d2.getUTCFullYear() &&
-             d1.getUTCMonth() === d2.getUTCMonth() &&
-             d1.getUTCDate() === d2.getUTCDate();
-    };
-
-    // Filter samples recorded for today
-    const todaySamples = sortedSamples.filter(sample => {
-      const time = sample.time || sample.timestamp;
-      return time && isSameDayInTimezone(time, now);
-    });
-
-    if (todaySamples.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          latestHeartRate: 0,
-          latestTimestamp: null,
-          previousHeartRate: 0,
-          trend: 'neutral',
-          trendValue: '0 bpm',
-          trendLabel: 'No heart rate recorded today',
-          recordCount: 0
-        }
-      });
-    }
-
-    // --- REPLICATE MOBILE APP SESSION AVERAGE LOGIC FOR TODAY'S DATA ---
-    // 1. Get latest Exercise Session
-    const latestExercise = await mongoose.model('ExerciseSession').findOne({ user: userId }).sort({ endTime: -1 });
-    // 2. Get latest Sleep Session
+    // Get the most recent sleep/exercise session (matches mobile: latest session avg BPM)
     const latestSleep = await mongoose.model('SleepSession').findOne({ user: userId }).sort({ endTime: -1 });
+    const latestExercise = await mongoose.model('ExerciseSession').findOne({ user: userId }).sort({ endTime: -1 });
 
+    // Pick the most recent session between sleep and exercise
     let mostRecentSession = null;
-    if (latestExercise && latestSleep) {
-      if (new Date(latestExercise.endTime).getTime() > new Date(latestSleep.endTime).getTime()) {
-        mostRecentSession = latestExercise;
-      } else {
-        mostRecentSession = latestSleep;
-      }
-    } else if (latestExercise) {
-      mostRecentSession = latestExercise;
-    } else if (latestSleep) {
-      mostRecentSession = latestSleep;
+    if (latestSleep && latestExercise) {
+      mostRecentSession = new Date(latestExercise.endTime) > new Date(latestSleep.endTime)
+        ? latestExercise : latestSleep;
+    } else {
+      mostRecentSession = latestSleep || latestExercise;
     }
+
+    // Flatten all samples from all records
+    const allSamples = heartRateData.flatMap(record =>
+      (record.samples || []).map(s => ({ ...s.toObject(), recordStart: record.startTime, recordEnd: record.endTime }))
+    );
 
     let latestHeartRate = 0;
     let latestTimestamp = null;
-    let previousHeartRate = 0;
 
-    if (mostRecentSession && isSameDayInTimezone(mostRecentSession.endTime, now)) {
+    if (mostRecentSession) {
       const sessionStart = new Date(mostRecentSession.startTime).getTime();
       const sessionEnd = new Date(mostRecentSession.endTime).getTime();
-      
-      const sessionSamples = todaySamples.filter(sample => {
-        const time = new Date(sample.time || sample.timestamp).getTime();
-        return time >= sessionStart && time <= sessionEnd;
+
+      // Get samples within the most recent session window
+      const sessionSamples = allSamples.filter(sample => {
+        const t = new Date(sample.time || sample.timestamp).getTime();
+        return t >= sessionStart && t <= sessionEnd;
       });
 
       if (sessionSamples.length > 0) {
-        const sum = sessionSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
-        latestHeartRate = Math.floor(sum / sessionSamples.length);
-        latestTimestamp = new Date(sessionSamples[0].time || sessionSamples[0].timestamp);
-      } else {
-        latestHeartRate = todaySamples[0].beatsPerMinute || 0;
-        latestTimestamp = new Date(todaySamples[0].time || todaySamples[0].timestamp);
+        // Average BPM across all samples in the session (matches mobile)
+        const sum = sessionSamples.reduce((acc, s) => acc + (s.beatsPerMinute || 0), 0);
+        latestHeartRate = Math.round(sum / sessionSamples.length);
+        latestTimestamp = mostRecentSession.endTime;
+        console.log('Session avg BPM: ' + latestHeartRate + ' from ' + sessionSamples.length + ' samples');
       }
-    } else {
-      latestHeartRate = todaySamples[0].beatsPerMinute || 0;
-      latestTimestamp = new Date(todaySamples[0].time || todaySamples[0].timestamp);
     }
 
-    // Previous logic for trend (simplified)
-    if (sortedSamples.length > 1) {
-      previousHeartRate = sortedSamples[1].beatsPerMinute || 0;
+    // Fallback: use the most recent single sample if no session match
+    if (latestHeartRate === 0 && allSamples.length > 0) {
+      const sorted = allSamples.sort((a, b) =>
+        new Date(b.time || b.timestamp) - new Date(a.time || a.timestamp)
+      );
+      latestHeartRate = sorted[0].beatsPerMinute || 0;
+      latestTimestamp = sorted[0].time || sorted[0].timestamp;
     }
 
-    console.log(`Latest heart rate: ${latestHeartRate}, Previous: ${previousHeartRate}`);
-
-    // Calculate trend
-    let trend = 'neutral';
-    let trendValue = '0 bpm';
-    let trendLabel = 'No trend data';
-
-    if (previousHeartRate && latestHeartRate !== previousHeartRate) {
-      const difference = latestHeartRate - previousHeartRate;
-      if (difference > 0) {
-        trend = 'up';
-        trendValue = `+${difference} bpm`;
-        trendLabel = 'Higher than previous reading';
-      } else {
-        trend = 'down';
-        trendValue = `${Math.abs(difference)} bpm`;
-        trendLabel = 'Lower than previous reading';
-      }
-    } else if (latestHeartRate > 0) {
-      trendLabel = 'Latest reading available';
-    }
+    // Trend label based on BPM value
+    const trendLabel = latestHeartRate > 0 ? 'Latest session avg BPM' : 'No heart rate recorded';
 
     return res.status(200).json({
       success: true,
       data: {
         latestHeartRate,
         latestTimestamp,
-        previousHeartRate,
-        trend,
-        trendValue,
+        trend: 'neutral',
+        trendValue: latestHeartRate > 0 ? latestHeartRate + ' bpm' : '0 bpm',
         trendLabel,
         recordCount: heartRateData.length
       }
     });
-    
+
   } catch (error) {
     console.error('Error in getHeartRateStats:', error);
-    return res.status(500).json({ 
-      success: false, 
+    return res.status(500).json({
+      success: false,
       message: error.message,
       error: error.toString()
     });
