@@ -8,6 +8,16 @@ import Step from '../components/Steps.jsx';
 import { AppContext } from '../context/AppContext';
 import axios from 'axios';
 import Ai from '../components/ai.jsx';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ReferenceLine
+} from 'recharts';
 
 import {
   ArrowTrendingUpIcon,
@@ -429,161 +439,95 @@ const SleepHistoryView = () => {
         </div>
 
         {/* Weekly Pattern Visualization (Sun–Sat bars) */}
-        <div className="bg-gray-800/60 border border-gray-700/50 rounded-2xl p-6 sm:p-8 backdrop-blur-md shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div className="bg-gray-800/50 border border-gray-700/60 rounded-2xl p-5 sm:p-6 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
             <div>
-              <h3 className="text-xl text-white font-medium flex items-center gap-2">
-                <span>Weekly Sleep Pattern</span>
-              </h3>
-              <p className="text-xs text-gray-400 mt-1">
-                Visualizing sleep duration and efficiency across the last 7 days
-              </p>
+              <h3 className="text-lg text-white font-medium">Weekly Sleep Pattern</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Hours slept per night (Recommended: 7–9 hrs)</p>
             </div>
-
-            {/* Target Legend Indicator */}
             <div className="flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-gradient-to-t from-blue-600 to-blue-400 shadow-sm" />
-                <span className="text-gray-300">Sleep Duration</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span className="text-gray-300">Quality Score</span>
-              </div>
+              <span className="flex items-center gap-1.5 text-gray-300">
+                <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" />
+                Sleep Duration (hrs)
+              </span>
+              <span className="flex items-center gap-1.5 text-emerald-400">
+                <span className="w-4 border-t-2 border-dashed border-emerald-400 inline-block" />
+                8h Target Goal
+              </span>
             </div>
           </div>
 
-          {sleepHistory.weeklyPattern.length > 0 ? (
-            <div className="overflow-x-auto">
-              <div className="min-w-full sm:min-w-[620px]">
-                {/* Chart Area */}
-                <div className="relative pt-6 pb-2">
-                  {/* Background Grid Lines & Y-Axis */}
-                  <div className="absolute inset-0 top-6 bottom-14 flex flex-col justify-between pointer-events-none">
-                    {[10, 8, 6, 4, 2, 0].map((hours) => (
-                      <div key={hours} className="flex items-center w-full gap-3">
-                        <span className="text-[11px] font-mono text-gray-500 w-6 text-right select-none">
-                          {hours}h
-                        </span>
-                        <div
-                          className={`flex-1 border-b ${
-                            hours === 8
-                              ? 'border-emerald-500/30 border-dashed'
-                              : 'border-gray-700/40'
-                          }`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Healthy Target Sleep Band (7h - 9h range) */}
-                  <div
-                    className="absolute left-9 right-0 pointer-events-none bg-blue-500/[0.04] border-y border-blue-500/10 rounded"
-                    style={{
-                      top: 'calc(1.5rem + 10%)',
-                      height: '20%',
-                    }}
-                  >
-                    <span className="absolute right-2 top-1 text-[9px] uppercase tracking-wider text-blue-400/60 font-semibold select-none">
-                      Recommended Goal (7–9h)
-                    </span>
-                  </div>
-
-                  {/* Bars Container */}
-                  <div className="relative z-10 pl-9">
-                    <div className="flex items-end gap-3 sm:gap-6 h-48 sm:h-56">
-                      {sleepHistory.weeklyPattern.map((day) => {
-                        const maxHours = 10;
-                        const safeDuration = Math.max(
-                          0,
-                          Math.min(day.duration || 0, maxHours)
-                        );
-                        const durationHeight = (safeDuration / maxHours) * 100;
-
-                        // Status Color according to duration
-                        const isOptimal = safeDuration >= 7 && safeDuration <= 9;
-                        const isLow = safeDuration > 0 && safeDuration < 6;
-
+          {sleepHistory.weeklyPattern && sleepHistory.weeklyPattern.length > 0 ? (
+            <div className="w-full h-64 sm:h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={sleepHistory.weeklyPattern.map((d) => ({
+                    day: d.day,
+                    hours: d.duration ? Math.round(d.duration * 10) / 10 : 0,
+                    quality: d.quality || 0,
+                  }))}
+                  margin={{ top: 15, right: 10, left: -15, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={{ stroke: '#4B5563' }}
+                  />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={{ stroke: '#4B5563' }}
+                    domain={[0, 10]}
+                    ticks={[0, 2, 4, 6, 8, 10]}
+                    unit="h"
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(59, 130, 246, 0.08)' }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
                         return (
-                          <div
-                            key={day.day}
-                            className="group flex-1 flex flex-col items-center h-full justify-end relative"
-                          >
-                            {/* Hover Tooltip */}
-                            <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-gray-900 border border-gray-700 text-white rounded-lg px-2.5 py-1.5 text-xs shadow-2xl z-30 whitespace-nowrap">
-                              <div className="font-semibold text-blue-300">{day.day}</div>
-                              <div className="text-[11px] text-gray-300">
-                                Duration: {day.duration > 0 ? formatSleepTime(day.duration) : 'No data'}
-                              </div>
-                              {day.quality > 0 && (
-                                <div className="text-[11px] text-emerald-400 font-medium">
-                                  Quality: {day.quality}%
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Bar Column Track */}
-                            <div className="relative w-8 sm:w-11 h-full flex items-end justify-center bg-gray-900/40 rounded-xl p-1 border border-gray-700/30 group-hover:border-blue-500/50 transition-colors">
-                              {/* Duration Bar with Gradient */}
-                              <div
-                                className={`w-full rounded-lg transition-all duration-500 flex flex-col justify-between items-center py-1.5 ${
-                                  isOptimal
-                                    ? 'bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-400 shadow-[0_0_12px_rgba(59,130,246,0.35)]'
-                                    : isLow
-                                    ? 'bg-gradient-to-t from-amber-600 to-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.25)]'
-                                    : 'bg-gradient-to-t from-blue-600 to-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.25)]'
-                                }`}
-                                style={{
-                                  height: `${Math.max(durationHeight, 4)}%`,
-                                }}
-                              >
-                                {safeDuration > 0 && (
-                                  <span className="text-[9px] font-bold text-white drop-shadow">
-                                    {Math.round(safeDuration * 10) / 10}h
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Day Name */}
-                            <div className="mt-3 text-xs sm:text-sm font-medium text-gray-200 group-hover:text-blue-400 transition-colors">
-                              {day.day}
-                            </div>
-
-                            {/* Quality Badge */}
-                            <div className="mt-1">
-                              {day.quality > 0 ? (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                                  {day.quality}%
-                                </span>
-                              ) : (
-                                <span className="text-[11px] text-gray-600">—</span>
-                              )}
-                            </div>
+                          <div className="bg-gray-900 border border-gray-700 p-3 rounded-lg shadow-xl text-xs space-y-1">
+                            <p className="font-semibold text-white">{data.day}</p>
+                            <p className="text-blue-400 font-medium">Duration: {data.hours} hours</p>
+                            {data.quality > 0 && (
+                              <p className="text-emerald-400">Sleep Quality: {data.quality}%</p>
+                            )}
                           </div>
                         );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Informative Summary Banner */}
-                <div className="mt-6 pt-4 border-t border-gray-700/40 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                    <span>Average duration targets <strong>7–9 hours</strong> for optimal cognitive recovery.</span>
-                  </div>
-                  <span className="text-gray-500">Bars with blue gradient indicate healthy sleep range.</span>
-                </div>
-              </div>
+                      }
+                      return null;
+                    }}
+                  />
+                  {/* 8-Hour Recommended Reference Line */}
+                  <ReferenceLine
+                    y={8}
+                    stroke="#10B981"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: '8h Target',
+                      position: 'insideTopRight',
+                      fill: '#10B981',
+                      fontSize: 11,
+                    }}
+                  />
+                  <Bar
+                    dataKey="hours"
+                    fill="#3B82F6"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={44}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           ) : (
-            // Empty state
-            <div className="flex items-center justify-center h-40 px-4 text-center text-gray-400">
-              <p className="text-sm sm:text-base leading-relaxed">
-                No sleep pattern data available yet. Your recent sleep sessions
-                will appear here once data is synced from your wearable.
-              </p>
+            <div className="flex items-center justify-center h-44 text-sm text-gray-400">
+              No sleep pattern data available yet.
             </div>
           )}
         </div>
