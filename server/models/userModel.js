@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema({
     enum: ["Male", "Female", "Prefer not to say"],
     required: true,
     },
+    avatar: { type: String, default: '' },
     sleepGoalBedtime: { type: String, default: '22:30' },
     sleepGoalDuration: { type: Number, default: 8 },
 });
