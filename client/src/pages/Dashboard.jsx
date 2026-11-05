@@ -285,27 +285,17 @@ const SleepHistoryView = () => {
     return 0;
   };
 
-  // Weekly pattern: fixed Mon -> Sun order for the current week
+  // Weekly pattern: Rolling 7 days (6 days ago -> today) matching mobile app
   const createWeeklyPattern = (sessions) => {
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
-    
-    // Find Monday of the current week (0 = Sun, 1 = Mon, ..., 6 = Sat)
-    const currentDayOfWeek = now.getDay();
-    // In JS: Sun=0. For Mon-start: Mon=0, Tue=1, ..., Sun=6
-    const distanceToMonday = (currentDayOfWeek + 6) % 7;
-    
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - distanceToMonday);
-    monday.setHours(0, 0, 0, 0);
-
     const pattern = [];
 
-    // Loop through 7 days: Mon -> Tue -> Wed -> Thu -> Fri -> Sat -> Sun
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + i);
-      const dayName = dayNames[i];
+    // Loop through last 7 days: 6 days ago up to today (i = 6 down to 0)
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i);
+      const dayName = dayNames[date.getDay()];
 
       // Sessions that belong to this day (based on wake-up / endTime)
       const sessionsForDay = sessions.filter((session) => {
@@ -503,6 +493,7 @@ const SleepHistoryView = () => {
                 <BarChart
                   data={sleepHistory.weeklyPattern.map((d) => ({
                     day: d.day,
+                    date: d.date,
                     hours: d.duration ? Math.round(d.duration * 10) / 10 : 0,
                     durationText: formatSleepTime(d.duration),
                     quality: d.quality || 0,
@@ -533,7 +524,7 @@ const SleepHistoryView = () => {
                         const data = payload[0].payload;
                         return (
                           <div className="bg-gray-900 border border-gray-700 p-3 rounded-lg shadow-xl text-xs space-y-1">
-                            <p className="font-semibold text-white">{data.day}</p>
+                            <p className="font-semibold text-white">{data.day}{data.date ? ` (${data.date})` : ''}</p>
                             <p className="text-blue-400 font-medium">Duration: {data.durationText}</p>
                             {data.quality > 0 && (
                               <p className="text-emerald-400">Sleep Quality: {data.quality}%</p>
