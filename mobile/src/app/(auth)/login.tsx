@@ -79,9 +79,9 @@ export default function Login() {
             try {
                 const saved = await AsyncStorage.getItem('rememberedCredentials');
                 if (saved) {
-                    const { email: savedEmail, password: savedPassword } = JSON.parse(saved);
-                    setEmail(savedEmail || '');
-                    setPassword(savedPassword || '');
+                    const parsed = JSON.parse(saved);
+                    setEmail(parsed.email || '');
+                    setPassword(''); // Never remember password for security (matches Web SOMNiA)
                     setRememberMe(true);
                 }
             } catch (e) {
@@ -119,9 +119,9 @@ export default function Login() {
                     };
                     await AsyncStorage.setItem('authData', JSON.stringify(authData));
 
-                    // Save or clear remembered credentials based on checkbox
+                    // Save or clear remembered credentials (email only, matches Web SOMNiA)
                     if (rememberMe) {
-                        await AsyncStorage.setItem('rememberedCredentials', JSON.stringify({ email, password }));
+                        await AsyncStorage.setItem('rememberedCredentials', JSON.stringify({ email }));
                     } else {
                         await AsyncStorage.removeItem('rememberedCredentials');
                     }
