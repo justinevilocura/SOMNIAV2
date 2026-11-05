@@ -34,7 +34,10 @@
         "android.permission.health.READ_HEART_RATE",
         "android.permission.health.READ_RESTING_HEART_RATE",
         "android.permission.health.READ_SLEEP",
-        "android.permission.health.READ_STEPS"
+        "android.permission.health.READ_STEPS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -44,6 +47,15 @@
       "expo-router",
       "react-native-health-connect",
       "./plugins/withHealthConnectDelegate.js",
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/images/icon.png",
+          "color": "#1a1a2e",
+          "sounds": [],
+          "mode": "production"
+        }
+      ],
       [
         "expo-build-properties",
         {
