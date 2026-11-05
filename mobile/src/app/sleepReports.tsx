@@ -140,7 +140,7 @@ export default function SleepReports() {
     backgroundGradientToOpacity: 0,
     color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
     strokeWidth: 2,
-    barPercentage: 0.6,
+    barPercentage: 0.55,
     useShadowColorFromDataset: false,
     decimalPlaces: 0,
     labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
@@ -171,17 +171,19 @@ export default function SleepReports() {
           {isLoading ? (
             <ActivityIndicator size="large" color="#a259ff" style={{ marginVertical: 40 }} />
           ) : (
-            <BarChart
-              data={chartData}
-              width={screenWidth - 80}
-              height={220}
-              yAxisSuffix="h"
-              yAxisLabel=""
-              chartConfig={chartConfig}
-              style={styles.chartStyle}
-              showValuesOnTopOfBars={true}
-              fromZero={true}
-            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <BarChart
+                data={chartData}
+                width={Math.max(screenWidth - 50, 440)}
+                height={225}
+                yAxisSuffix="h"
+                yAxisLabel=""
+                chartConfig={chartConfig}
+                style={styles.chartStyle}
+                showValuesOnTopOfBars={true}
+                fromZero={true}
+              />
+            </ScrollView>
           )}
         </View>
 
@@ -242,7 +244,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 20,
-    padding: 20,
+    padding: 14,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
