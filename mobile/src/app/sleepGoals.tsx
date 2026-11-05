@@ -1,4 +1,12 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  ScrollView, 
+  Platform, 
+  StatusBar 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
@@ -15,29 +23,57 @@ export default function SleepGoals() {
   const [sleepDuration, setSleepDuration] = useState(8); // hours
   const [showPicker, setShowPicker] = useState(false);
   const [showDurationPicker, setShowDurationPicker] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadGoals();
   }, []);
 
+  const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+
   const loadGoals = async () => {
     try {
+      // 1. Try local cache first for instant rendering
       const stored = await AsyncStorage.getItem('sleepGoals');
       if (stored) {
         const parsed = JSON.parse(stored);
-        setBedtimeHour(parsed.bedtimeHour ?? 22);
-        setBedtimeMinute(parsed.bedtimeMinute ?? 30);
-        setSleepDuration(parsed.sleepDuration ?? 8);
+        if (parsed.bedtimeHour !== undefined) setBedtimeHour(parsed.bedtimeHour);
+        if (parsed.bedtimeMinute !== undefined) setBedtimeMinute(parsed.bedtimeMinute);
+        if (parsed.sleepDuration !== undefined) setSleepDuration(parsed.sleepDuration);
+      }
+
+      // 2. Refresh from backend user data if token available
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const res = await fetch(`${backendUrl}/api/user/data`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const json = await res.json();
+        if (json.success && json.userData) {
+          if (json.userData.sleepGoalBedtime) {
+            const [hStr, mStr] = json.userData.sleepGoalBedtime.split(':');
+            const h = parseInt(hStr, 10);
+            const m = parseInt(mStr, 10);
+            if (!isNaN(h) && !isNaN(m)) {
+              setBedtimeHour(h);
+              setBedtimeMinute(m);
+            }
+          }
+          if (json.userData.sleepGoalDuration) {
+            setSleepDuration(Number(json.userData.sleepGoalDuration));
+          }
+        }
       }
     } catch (e) {
-      console.error('Failed to load goals', e);
+      console.log('Failed to load goals:', e);
     }
   };
 
-  const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
-
   const saveGoals = async () => {
     try {
+      setIsSaving(true);
       await AsyncStorage.setItem('sleepGoals', JSON.stringify({
         bedtimeHour,
         bedtimeMinute,
@@ -48,13 +84,18 @@ export default function SleepGoals() {
       const token = await AsyncStorage.getItem('token');
       const authDataString = await AsyncStorage.getItem('authData');
 
-      if (token && authDataString) {
-        const authData = JSON.parse(authDataString);
-        const userId = authData.user_id;
+      if (token) {
+        let userId = undefined;
+        if (authDataString) {
+          try {
+            const authData = JSON.parse(authDataString);
+            userId = authData.user_id || authData.id || authData._id;
+          } catch (_) {}
+        }
 
         const formatBedtime = `${bedtimeHour.toString().padStart(2, '0')}:${bedtimeMinute.toString().padStart(2, '0')}`;
 
-        await fetch(`${backendUrl}/api/user/update-goals`, {
+        const res = await fetch(`${backendUrl}/api/user/update-goals`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -66,14 +107,24 @@ export default function SleepGoals() {
             sleepGoalDuration: sleepDuration
           })
         });
+
+        const json = await res.json();
+        if (json.success) {
+          Toast.show({ type: 'success', text1: 'Goals Saved!', text2: 'Your sleep targets have been updated.' });
+        } else {
+          Toast.show({ type: 'info', text1: 'Saved on Device', text2: json.message || 'Saved locally.' });
+        }
+      } else {
+        Toast.show({ type: 'success', text1: 'Goals Saved Locally', text2: 'Sleep targets updated on this device.' });
       }
 
-      Toast.show({ type: 'success', text1: 'Goals Synced to Cloud!', text2: 'Your sleep targets have been updated.' });
       router.replace({ pathname: '/home', params: { tab: 'profile' } });
     } catch (e) {
       console.error('Failed to save goals', e);
-      Toast.show({ type: 'error', text1: 'Sync Failed', text2: 'Saved locally, but failed to sync to cloud.' });
+      Toast.show({ type: 'error', text1: 'Save Failed', text2: 'Saved locally, but sync encountered an error.' });
       router.replace({ pathname: '/home', params: { tab: 'profile' } });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -124,34 +175,43 @@ export default function SleepGoals() {
 
   // Calculate Wake Time based on bedtime + duration
   const calcWakeTime = () => {
-    let totalMinutes = (bedtimeHour * 60) + bedtimeMinute + (sleepDuration * 60);
-    if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
+    let totalMinutes = Math.round((bedtimeHour * 60) + bedtimeMinute + (sleepDuration * 60));
+    totalMinutes = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
     return formatTime(Math.floor(totalMinutes / 60), totalMinutes % 60);
   };
 
   return (
     <LinearGradient colors={['#1a1a2e', '#23234b']} style={styles.container}>
+      {/* Header with back button */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace({ pathname: '/home', params: { tab: 'profile' } })} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color="#fff" />
+        <TouchableOpacity 
+          onPress={() => router.replace({ pathname: '/home', params: { tab: 'profile' } })} 
+          style={styles.backButton}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          accessibilityLabel="Back to Profile"
+        >
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Sleep Goals</Text>
       </View>
 
-      <View style={styles.content}>
-
+      {/* Scrollable content so it never overflows or gets cut off */}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Target Bedtime Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="moon" size={24} color="#5d3fd3" />
+            <Ionicons name="moon" size={18} color="#a259ff" />
             <Text style={styles.cardTitle}>Target Bedtime</Text>
           </View>
 
-          <View style={[styles.controlRow, { justifyContent: 'center' }]}>
-            <TouchableOpacity onPress={() => setShowPicker(true)} style={styles.timePickerBtn}>
-              <Text style={styles.timeValue}>{formatTime(bedtimeHour, bedtimeMinute)}</Text>
-              <Text style={styles.editHint}>Tap to edit</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => setShowPicker(true)} style={styles.timePickerBtn}>
+            <Text style={styles.timeValue}>{formatTime(bedtimeHour, bedtimeMinute)}</Text>
+            <Text style={styles.editHint}>Tap to edit</Text>
+          </TouchableOpacity>
 
           {showPicker && (
             <DateTimePicker
@@ -164,18 +224,17 @@ export default function SleepGoals() {
           )}
         </View>
 
+        {/* Sleep Duration Goal Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="time" size={24} color="#43e97b" />
+            <Ionicons name="time" size={18} color="#43e97b" />
             <Text style={styles.cardTitle}>Sleep Duration Goal</Text>
           </View>
 
-          <View style={[styles.controlRow, { justifyContent: 'center' }]}>
-            <TouchableOpacity onPress={() => setShowDurationPicker(true)} style={styles.timePickerBtn}>
-              <Text style={styles.timeValue}>{formatDurationDisplay()}</Text>
-              <Text style={styles.editHint}>Tap to edit</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => setShowDurationPicker(true)} style={styles.timePickerBtn}>
+            <Text style={styles.timeValue}>{formatDurationDisplay()}</Text>
+            <Text style={styles.editHint}>Tap to edit</Text>
+          </TouchableOpacity>
 
           {showDurationPicker && (
             <DateTimePicker
@@ -188,18 +247,28 @@ export default function SleepGoals() {
           )}
         </View>
 
+        {/* Estimated Wake Time Card */}
         <View style={styles.summaryCard}>
-          <Ionicons name="sunny" size={32} color="#ff8c42" style={{ marginBottom: 10 }} />
+          <Ionicons name="sunny" size={24} color="#ff8c42" style={{ marginBottom: 4 }} />
           <Text style={styles.summaryLabel}>Estimated Wake Time</Text>
           <Text style={styles.summaryValue}>{calcWakeTime()}</Text>
-          <Text style={styles.summaryDesc}>Based on your target bedtime and duration goal, you should expect to wake up at this time.</Text>
+          <Text style={styles.summaryDesc}>
+            Based on your target bedtime and duration goal, you should expect to wake up at this time.
+          </Text>
         </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={saveGoals}>
-          <Text style={styles.saveButtonText}>Save Goals</Text>
+        {/* Save Goals Button - positioned cleanly above navigation bar */}
+        <TouchableOpacity 
+          style={[styles.saveButton, isSaving && { opacity: 0.7 }]} 
+          onPress={saveGoals}
+          disabled={isSaving}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.saveButtonText}>
+            {isSaving ? 'Saving...' : 'Save Goals'}
+          </Text>
         </TouchableOpacity>
-
-      </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -211,111 +280,111 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 48,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   backButton: {
-    marginRight: 15,
+    padding: 6,
+    marginRight: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
   },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: Platform.OS === 'android' ? 50 : 36, // Ample breathing room above system navigation bar
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    justifyContent: 'center'
+    marginBottom: 10,
+    justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
     color: '#fff',
-    marginLeft: 10,
-  },
-  controlRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  controlBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginLeft: 8,
   },
   timePickerBtn: {
     alignItems: 'center',
-    padding: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(93, 63, 211, 0.3)',
+    borderColor: 'rgba(162, 89, 255, 0.25)',
     width: '100%',
   },
   editHint: {
-    fontSize: 12,
-    color: '#5d3fd3',
-    marginTop: 5,
-    fontWeight: 'bold',
+    fontSize: 11,
+    color: '#a259ff',
+    marginTop: 3,
+    fontWeight: '600',
   },
   timeValue: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
+    letterSpacing: 0.5,
   },
   summaryCard: {
-    backgroundColor: 'rgba(255, 140, 66, 0.1)',
-    borderRadius: 20,
-    padding: 25,
+    backgroundColor: 'rgba(255, 140, 66, 0.08)',
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 140, 66, 0.3)',
+    borderColor: 'rgba(255, 140, 66, 0.25)',
   },
   summaryLabel: {
-    fontSize: 16,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 5,
+    marginBottom: 2,
   },
   summaryValue: {
-    fontSize: 36,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#ff8c42',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   summaryDesc: {
-    fontSize: 14,
+    fontSize: 12,
     color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 16,
+    paddingHorizontal: 8,
   },
   saveButton: {
     backgroundColor: '#5d3fd3',
-    borderRadius: 15,
-    paddingVertical: 18,
+    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#5d3fd3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   saveButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-  }
+    letterSpacing: 0.3,
+  },
 });

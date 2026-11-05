@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import LinearGradient from 'react-native-linear-gradient';
@@ -12,7 +12,7 @@ export default function SleepReports() {
   const router = useRouter();
 
   const [isLoading, setIsLoading] = useState(true);
-  const [avgDuration, setAvgDuration] = useState('0.0h');
+  const [avgDuration, setAvgDuration] = useState('0h 0m');
   const [consistency, setConsistency] = useState('0%');
   const [aiInsight, setAiInsight] = useState('Analyzing your sleep patterns...');
   const [chartData, setChartData] = useState({
@@ -74,7 +74,9 @@ export default function SleepReports() {
         }
 
         const avgVal = daysWithSleep > 0 ? (totalHours / daysWithSleep) : 0;
-        setAvgDuration(`${avgVal.toFixed(1)}h`);
+        const avgH = Math.floor(avgVal);
+        const avgM = Math.round((avgVal - avgH) * 60);
+        setAvgDuration(avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`);
 
         // Calculate Consistency similar to Web Dashboard Efficiency (Target: 8 hours)
         let efficiency = avgVal > 0 ? (avgVal / 8) * 100 : 0;
@@ -189,7 +191,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 48,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
