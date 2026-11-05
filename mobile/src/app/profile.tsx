@@ -2,7 +2,12 @@ import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { initialize, requestPermission, getGrantedPermissions } from 'react-native-health-connect';
+import {
+  initialize,
+  requestPermission,
+  getGrantedPermissions,
+  openHealthConnectSettings,
+} from 'react-native-health-connect';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
@@ -172,20 +177,30 @@ export default function Profile() {
   };
 
   const handleConnectFit = async () => {
+    if (isHealthConnectLive) {
+      Toast.show({
+        type: 'success',
+        text1: 'Health Connect Active',
+        text2: 'Smartwatch data is linked and syncing normally.',
+      });
+      return;
+    }
+
     try {
       const isInitialized = await initialize();
-      if (isInitialized) {
-        await requestPermission([
-          { accessType: 'read', recordType: 'Steps' },
-          { accessType: 'read', recordType: 'HeartRate' },
-          { accessType: 'read', recordType: 'SleepSession' },
-          { accessType: 'read', recordType: 'ExerciseSession' },
-        ]);
-        setIsHealthConnectLive(true);
-        await AsyncStorage.setItem('healthConnectLive', 'true');
-      }
+      if (!isInitialized) return;
+
+      const granted = await requestPermission([
+        { accessType: 'read', recordType: 'Steps' },
+        { accessType: 'read', recordType: 'HeartRate' },
+        { accessType: 'read', recordType: 'SleepSession' },
+        { accessType: 'read', recordType: 'ExerciseSession' },
+      ]);
+      const hasPermissions = Array.isArray(granted) && granted.length > 0;
+      setIsHealthConnectLive(hasPermissions);
+      await AsyncStorage.setItem('healthConnectLive', hasPermissions ? 'true' : 'false');
     } catch (error) {
-      console.log('Health Connect failed to initialize', error);
+      console.log('Health Connect connection error', error);
     }
   };
 
@@ -236,9 +251,13 @@ export default function Profile() {
             <Text style={styles.wearableStatusDisconnected}>Disconnected</Text>
           )}
         </View>
-        <TouchableOpacity style={styles.connectButton} onPress={handleConnectFit}>
-          <Text style={styles.connectButtonText}>
-            {isHealthConnectLive ? 'Permissions' : '+ Connect'}
+        <TouchableOpacity
+          style={[styles.connectButton, isHealthConnectLive && styles.connectedBadge]}
+          onPress={handleConnectFit}
+          activeOpacity={isHealthConnectLive ? 0.8 : 0.7}
+        >
+          <Text style={[styles.connectButtonText, isHealthConnectLive && styles.connectedBadgeText]}>
+            {isHealthConnectLive ? '✓ Connected' : '+ Connect'}
           </Text>
         </TouchableOpacity>
       </View>

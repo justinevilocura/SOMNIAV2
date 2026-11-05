@@ -120,6 +120,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
   },
+  connectedBadge: {
+    backgroundColor: 'rgba(67, 233, 123, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(67, 233, 123, 0.4)',
+  },
+  connectedBadgeText: {
+    color: '#43e97b',
+    fontWeight: '600',
+  },
   connectButtonText: {
     color: '#fff',
     fontSize: 12,
