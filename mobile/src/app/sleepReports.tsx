@@ -54,16 +54,42 @@ export default function SleepReports() {
           dynamicLabels.push(daysArray[date.getDay()]);
 
           // Find sessions for this specific calendar day (based on wake-up time / endTime)
-          let dayHours = 0;
-          json.data.sessions.forEach((session: any) => {
+          const sessionsForDay = json.data.sessions.filter((session: any) => {
             const sessionDate = new Date(session.endTime || session.startTime);
-            if (sessionDate.toDateString() === date.toDateString()) {
-              dayHours += session.durationHours;
-            }
+            return sessionDate.toDateString() === date.toDateString();
           });
 
-          // Cap at 24 hours just in case of multiple sync bugs
-          dayHours = Math.min(dayHours, 24);
+          // Merge overlapping intervals to prevent double-counting (matching Web Dashboard)
+          const intervals = sessionsForDay
+            .map((s: any) => ({
+              start: new Date(s.startTime).getTime(),
+              end: new Date(s.endTime).getTime(),
+            }))
+            .filter((int: any) => !isNaN(int.start) && !isNaN(int.end) && int.end > int.start)
+            .sort((a: any, b: any) => a.start - b.start);
+
+          let dayHours = 0;
+          if (intervals.length > 0) {
+            const merged = [{ ...intervals[0] }];
+            for (let j = 1; j < intervals.length; j++) {
+              const prev = merged[merged.length - 1];
+              const curr = intervals[j];
+              if (curr.start <= prev.end) {
+                prev.end = Math.max(prev.end, curr.end);
+              } else {
+                merged.push({ ...curr });
+              }
+            }
+            const totalMs = merged.reduce((sum: number, int: any) => sum + (int.end - int.start), 0);
+            dayHours = totalMs / (1000 * 60 * 60);
+          } else {
+            sessionsForDay.forEach((s: any) => {
+              dayHours += (s.durationHours || 0);
+            });
+          }
+
+          // Round to 2 decimal places to avoid floating-point artifacts like 7.44999999999
+          dayHours = Math.round(Math.min(dayHours, 24) * 100) / 100;
           weeklyData.push(dayHours);
 
           // Only include realistic numbers (less than 14 hours) for the average
@@ -76,20 +102,21 @@ export default function SleepReports() {
         const avgVal = daysWithSleep > 0 ? (totalHours / daysWithSleep) : 0;
         const avgH = Math.floor(avgVal);
         const avgM = Math.round((avgVal - avgH) * 60);
-        setAvgDuration(avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`);
+        const formattedAvg = avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`;
+        setAvgDuration(formattedAvg);
 
         // Calculate Consistency similar to Web Dashboard Efficiency (Target: 8 hours)
         let efficiency = avgVal > 0 ? (avgVal / 8) * 100 : 0;
         efficiency = Math.min(100, Math.round(efficiency));
         setConsistency(`${efficiency}%`);
 
-        // Generate dynamic AI Insight
+        // Generate dynamic AI Insight using friendly clock format
         if (avgVal >= 7 && avgVal <= 9) {
-          setAiInsight(`Your average sleep duration is ${avgVal.toFixed(1)} hours, which is within the optimal range of 7-9 hours. Keep up the great work!`);
+          setAiInsight(`Your average sleep duration is ${formattedAvg}, which is within the optimal range of 7-9 hours. Keep up the great work!`);
         } else if (avgVal > 0 && avgVal < 7) {
-          setAiInsight(`You are averaging ${avgVal.toFixed(1)} hours of sleep, which is below the recommended 7 hours. Try gradually adjusting your bedtime earlier to get more rest.`);
+          setAiInsight(`You are averaging ${formattedAvg} of sleep, which is below the recommended 7 hours. Try gradually adjusting your bedtime earlier to get more rest.`);
         } else if (avgVal > 9) {
-          setAiInsight(`You are averaging ${avgVal.toFixed(1)} hours of sleep. While sleep is important, oversleeping consistently can sometimes leave you feeling groggy.`);
+          setAiInsight(`You are averaging ${formattedAvg} of sleep. While sleep is important, oversleeping consistently can sometimes leave you feeling groggy.`);
         } else {
           setAiInsight("Not enough realistic sleep data to generate an insight for this week.");
         }
@@ -115,8 +142,14 @@ export default function SleepReports() {
     strokeWidth: 2,
     barPercentage: 0.6,
     useShadowColorFromDataset: false,
-    decimalPlaces: 1,
+    decimalPlaces: 0,
     labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+    formatTopBarValue: (val: number) => {
+      if (!val || val <= 0) return '';
+      const h = Math.floor(val);
+      const m = Math.round((val - h) * 60);
+      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    },
   };
 
   return (
