@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { initialize, requestPermission } from 'react-native-health-connect';
+import { initialize, requestPermission, getGrantedPermissions } from 'react-native-health-connect';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../assets/styles/profile.styles';
 
@@ -21,9 +21,24 @@ export default function Profile() {
   }, []);
 
   const checkHealthConnect = async () => {
-    const status = await AsyncStorage.getItem('healthConnectLive');
-    if (status === 'true') {
-      setIsHealthConnectLive(true);
+    try {
+      // 1. Check local cache first for instant render
+      const status = await AsyncStorage.getItem('healthConnectLive');
+      if (status === 'true') {
+        setIsHealthConnectLive(true);
+      }
+
+      // 2. Query real Health Connect API directly
+      const isInitialized = await initialize();
+      if (isInitialized) {
+        const granted = (await getGrantedPermissions()) || [];
+        // If user granted any core health permissions (Sleep, Steps, HeartRate, etc.)
+        const hasPermissions = Array.isArray(granted) && granted.length > 0;
+        setIsHealthConnectLive(hasPermissions);
+        await AsyncStorage.setItem('healthConnectLive', hasPermissions ? 'true' : 'false');
+      }
+    } catch (e) {
+      console.log('Error verifying Health Connect status:', e);
     }
   };
 

@@ -13,108 +13,14 @@ import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
-import * as Notifications from 'expo-notifications';
-
-// Configure how notifications appear when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
-const NOTIF_IDS_KEY = 'scheduledNotifIds';
-
-// --- Helpers ---
-
-/** Request Android/iOS notification permissions */
-const requestPermissions = async (): Promise<boolean> => {
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  if (existing === 'granted') return true;
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status === 'granted';
-};
-
-/** Cancel a saved notification by its storage key */
-const cancelNotif = async (key: string) => {
-  try {
-    const stored = await AsyncStorage.getItem(NOTIF_IDS_KEY);
-    const ids = stored ? JSON.parse(stored) : {};
-    if (ids[key]) {
-      await Notifications.cancelScheduledNotificationAsync(ids[key]);
-      delete ids[key];
-      await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(ids));
-    }
-  } catch (e) {
-    console.error('cancelNotif error', e);
-  }
-};
-
-/** Save a notification ID under a key */
-const saveNotifId = async (key: string, id: string) => {
-  try {
-    const stored = await AsyncStorage.getItem(NOTIF_IDS_KEY);
-    const ids = stored ? JSON.parse(stored) : {};
-    ids[key] = id;
-    await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(ids));
-  } catch (e) {
-    console.error('saveNotifId error', e);
-  }
-};
-
-/** Schedule a daily notification at hour:minute */
-const scheduleDailyNotif = async (
-  key: string,
-  hour: number,
-  minute: number,
-  title: string,
-  body: string
-) => {
-  await cancelNotif(key); // cancel any old one first
-  const id = await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour,
-      minute,
-    },
-  });
-  await saveNotifId(key, id);
-  return id;
-};
-
-/** Schedule a weekly notification on Sunday at hour:minute */
-const scheduleWeeklyNotif = async (
-  key: string,
-  hour: number,
-  minute: number,
-  title: string,
-  body: string
-) => {
-  await cancelNotif(key);
-  const id = await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-      weekday: 1, // Sunday = 1 in Expo (1=Sun, 2=Mon, ... 7=Sat)
-      hour,
-      minute,
-    },
-  });
-  await saveNotifId(key, id);
-  return id;
-};
-
-// --- Component ---
+import {
+  requestNotificationPermissions,
+  syncBedtimeNotification,
+  scheduleDailyNotification,
+  scheduleWeeklyNotification,
+  cancelNotification,
+  syncAllNotifications,
+} from '../utils/notificationService';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -128,13 +34,13 @@ export default function NotificationsScreen() {
   }, []);
 
   const initScreen = async () => {
-    // 1. Request permissions upfront
-    const granted = await requestPermissions();
+    // 1. Request permissions & setup notification channel
+    const granted = await requestNotificationPermissions();
     setPermGranted(granted);
     if (!granted) {
       Alert.alert(
         'Notifications Disabled',
-        'Please enable notifications in your phone Settings to use this feature.',
+        'Please enable notifications in your phone Settings to receive sleep reminders.',
         [{ text: 'OK' }]
       );
     }
@@ -168,20 +74,25 @@ export default function NotificationsScreen() {
 
   const toggleBedtime = async (value: boolean) => {
     if (value && !permGranted) {
-      Alert.alert('Permission Required', 'Please enable notifications in your phone Settings first.');
-      return;
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Permission Required', 'Please enable notifications in phone Settings first.');
+        return;
+      }
+      setPermGranted(true);
     }
+
     setBedtimeReminder(value);
-    saveSettings({ bedtimeReminder: value });
+    await saveSettings({ bedtimeReminder: value });
 
     if (value) {
-      // Read the saved bedtime from sleepGoals (default 10:30 PM = 22:30)
+      // Fetch bedtime hour & min
       let hour = 22;
       let minute = 30;
       try {
-        const goals = await AsyncStorage.getItem('sleepGoals');
-        if (goals) {
-          const parsed = JSON.parse(goals);
+        const goalsStr = await AsyncStorage.getItem('sleepGoals');
+        if (goalsStr) {
+          const parsed = JSON.parse(goalsStr);
           if (parsed.bedtimeHour !== undefined) hour = parsed.bedtimeHour;
           if (parsed.bedtimeMinute !== undefined) minute = parsed.bedtimeMinute;
         }
@@ -191,60 +102,65 @@ export default function NotificationsScreen() {
       const displayH = hour % 12 || 12;
       const displayM = minute < 10 ? `0${minute}` : minute;
 
-      await scheduleDailyNotif(
-        'bedtime',
-        hour,
-        minute,
-        '🌙 Bedtime Reminder',
-        `It's ${displayH}:${displayM} ${ampm} — time to wind down and prepare for sleep.`
-      );
-      Alert.alert('✅ Reminder Set', `You'll be reminded daily at ${displayH}:${displayM} ${ampm}`);
+      await syncBedtimeNotification(hour, minute);
+      Alert.alert('✅ Reminder Active', `You will be reminded daily at ${displayH}:${displayM} ${ampm} to sleep.`);
     } else {
-      await cancelNotif('bedtime');
+      await cancelNotification('bedtime');
     }
   };
 
   const toggleSync = async (value: boolean) => {
     if (value && !permGranted) {
-      Alert.alert('Permission Required', 'Please enable notifications in your phone Settings first.');
-      return;
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Permission Required', 'Please enable notifications in phone Settings first.');
+        return;
+      }
+      setPermGranted(true);
     }
+
     setSyncReminder(value);
-    saveSettings({ syncReminder: value });
+    await saveSettings({ syncReminder: value });
 
     if (value) {
-      await scheduleDailyNotif(
+      await scheduleDailyNotification(
         'sync',
         8, // 8:00 AM every morning
         0,
         '📊 Daily Sync Reminder',
-        'Open SOMNiA to sync your sleep and health data for today.'
+        'Open SOMNiA to sync your sleep and health data from last night.'
       );
-      Alert.alert('✅ Reminder Set', "You'll be reminded every day at 8:00 AM to sync.");
+      Alert.alert('✅ Reminder Active', 'You will be reminded every morning at 8:00 AM to sync.');
     } else {
-      await cancelNotif('sync');
+      await cancelNotification('sync');
     }
   };
 
   const toggleInsights = async (value: boolean) => {
     if (value && !permGranted) {
-      Alert.alert('Permission Required', 'Please enable notifications in your phone Settings first.');
-      return;
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Permission Required', 'Please enable notifications in phone Settings first.');
+        return;
+      }
+      setPermGranted(true);
     }
+
     setWeeklyInsights(value);
-    saveSettings({ weeklyInsights: value });
+    await saveSettings({ weeklyInsights: value });
 
     if (value) {
-      await scheduleWeeklyNotif(
+      await scheduleWeeklyNotification(
         'weekly',
-        9, // Every Sunday at 9:00 AM
+        1, // Sunday
+        9, // 9:00 AM
         0,
         '📈 Your Weekly Sleep Insights Are Ready',
-        'Check your SOMNiA sleep report — see how you slept this week!'
+        'Check your SOMNiA weekly sleep report to see how you performed!'
       );
-      Alert.alert('✅ Insights Enabled', "You'll get weekly sleep insights every Sunday at 9:00 AM.");
+      Alert.alert('✅ Insights Active', 'You will receive your weekly sleep report every Sunday at 9:00 AM.');
     } else {
-      await cancelNotif('weekly');
+      await cancelNotification('weekly');
     }
   };
 
@@ -281,7 +197,7 @@ export default function NotificationsScreen() {
             <View style={styles.textContainer}>
               <Text style={styles.settingTitle}>Bedtime Reminder</Text>
               <Text style={styles.settingDesc}>
-                Get alerted at your target bedtime from Sleep Goals.
+                Get alerted daily at your target bedtime. Auto-updates when you change Sleep Goals!
               </Text>
             </View>
             <Switch
@@ -323,7 +239,7 @@ export default function NotificationsScreen() {
             <View style={styles.textContainer}>
               <Text style={styles.settingTitle}>Weekly Insights</Text>
               <Text style={styles.settingDesc}>
-                Get notified every Sunday at 9:00 AM when your weekly report is ready.
+                Get notified every Sunday at 9:00 AM when your weekly sleep analysis is ready.
               </Text>
             </View>
             <Switch
@@ -338,9 +254,9 @@ export default function NotificationsScreen() {
 
         {/* Info note */}
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.5)" />
+          <Ionicons name="sparkles" size={16} color="#a259ff" />
           <Text style={styles.infoText}>
-            Bedtime reminder uses the time set in your Sleep Goals. Update it there to change the reminder time.
+            Bedtime reminders automatically sync with whatever bedtime you save in Sleep Goals.
           </Text>
         </View>
       </View>
@@ -441,7 +357,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.45)',
+    color: 'rgba(255, 255, 255, 0.5)',
     flex: 1,
     lineHeight: 17,
   },

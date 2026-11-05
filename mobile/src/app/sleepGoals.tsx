@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { syncBedtimeNotification } from '../utils/notificationService';
 
 export default function SleepGoals() {
   const router = useRouter();
@@ -79,6 +80,13 @@ export default function SleepGoals() {
         bedtimeMinute,
         sleepDuration
       }));
+
+      // Automatically sync bedtime notification schedule if reminder is active
+      try {
+        await syncBedtimeNotification(bedtimeHour, bedtimeMinute);
+      } catch (notifErr) {
+        console.log('Error auto-syncing notification:', notifErr);
+      }
 
       // Sync to backend
       const token = await AsyncStorage.getItem('token');

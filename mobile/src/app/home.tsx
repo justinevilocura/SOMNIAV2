@@ -84,6 +84,7 @@ export default function Home() {
             if (missing.length > 0) {
               await requestPermission(missing.map(m => ({ accessType: 'read', recordType: m } as any)));
             }
+            await AsyncStorage.setItem('healthConnectLive', 'true');
           } catch (permErr) {
             console.warn('Health Connect permission check/request warning:', permErr);
           }
