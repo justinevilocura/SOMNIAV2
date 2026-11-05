@@ -1,18 +1,22 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { initialize, requestPermission, getGrantedPermissions } from 'react-native-health-connect';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import Toast from 'react-native-toast-message';
 import styles from '../assets/styles/profile.styles';
 
 export default function Profile() {
   const router = useRouter();
   const [userData, setUserData] = useState({
     name: '',
-    email: ''
+    email: '',
+    avatar: ''
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const [isHealthConnectLive, setIsHealthConnectLive] = useState(false);
 
   useEffect(() => {
@@ -32,7 +36,6 @@ export default function Profile() {
       const isInitialized = await initialize();
       if (isInitialized) {
         const granted = (await getGrantedPermissions()) || [];
-        // If user granted any core health permissions (Sleep, Steps, HeartRate, etc.)
         const hasPermissions = Array.isArray(granted) && granted.length > 0;
         setIsHealthConnectLive(hasPermissions);
         await AsyncStorage.setItem('healthConnectLive', hasPermissions ? 'true' : 'false');
@@ -44,13 +47,41 @@ export default function Profile() {
 
   const loadUserData = async () => {
     try {
+      // 1. Load from cache first for instantaneous render
       const authDataString = await AsyncStorage.getItem('authData');
       if (authDataString) {
         const authData = JSON.parse(authDataString);
         setUserData({
           name: authData.name || 'User',
-          email: authData.email || ''
+          email: authData.email || '',
+          avatar: authData.avatar || '',
         });
+      }
+
+      // 2. Fetch fresh real user profile from backend (real registered name & avatar)
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+        const res = await fetch(`${backendUrl}/api/user/data`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (json.success && json.userData) {
+          const freshData = {
+            name: json.userData.name || 'User',
+            email: json.userData.email || '',
+            avatar: json.userData.avatar || '',
+          };
+          setUserData(freshData);
+
+          // Update local cache so home and other screens have the real full name
+          if (authDataString) {
+            const parsed = JSON.parse(authDataString);
+            parsed.name = freshData.name;
+            parsed.avatar = freshData.avatar;
+            await AsyncStorage.setItem('authData', JSON.stringify(parsed));
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -59,9 +90,81 @@ export default function Profile() {
     }
   };
 
+  const handlePickImage = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Needed',
+          'Please allow photo library access in phone settings to change your profile picture.'
+        );
+        return;
+      }
+
+      // Launch picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64Image = `data:image/jpeg;base64,${asset.base64}`;
+
+        setIsUploading(true);
+        // Optimistic UI update
+        setUserData(prev => ({ ...prev, avatar: base64Image }));
+
+        // Upload to backend
+        const token = await AsyncStorage.getItem('token');
+        const authDataString = await AsyncStorage.getItem('authData');
+        let userId = '';
+        if (authDataString) {
+          try {
+            const authData = JSON.parse(authDataString);
+            userId = authData.user_id || authData.id || authData._id;
+          } catch (_) {}
+        }
+
+        const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+        const res = await fetch(`${backendUrl}/api/user/update-avatar`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ userId, avatar: base64Image })
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          Toast.show({ type: 'success', text1: 'Photo Updated!', text2: 'Your new avatar is saved.' });
+          // Update cache
+          if (authDataString) {
+            const parsed = JSON.parse(authDataString);
+            parsed.avatar = base64Image;
+            await AsyncStorage.setItem('authData', JSON.stringify(parsed));
+          }
+        } else {
+          Toast.show({ type: 'error', text1: 'Upload Failed', text2: json.message || 'Could not save photo.' });
+        }
+      }
+    } catch (err) {
+      console.error('Error selecting avatar image:', err);
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not select photo.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('authData');
+      await AsyncStorage.removeItem('token');
       router.replace('/(auth)/login');
     } catch (error) {
       console.error('Error logging out:', error);
@@ -89,11 +192,34 @@ export default function Profile() {
   return (
     <View style={styles.card}>
       <View style={styles.profileHeader}>
-        <Image
-          source={require('../assets/images/default-avatar.png')}
-          style={styles.profileImage}
-        />
-        <Text style={styles.profileName}>{userData.name}</Text>
+        {/* Interactive Avatar with Camera Edit Badge */}
+        <TouchableOpacity
+          onPress={handlePickImage}
+          activeOpacity={0.8}
+          style={styles.avatarContainer}
+        >
+          {userData.avatar ? (
+            <Image
+              source={{ uri: userData.avatar }}
+              style={styles.profileImage}
+            />
+          ) : (
+            <Image
+              source={require('../assets/images/default-avatar.png')}
+              style={styles.profileImage}
+            />
+          )}
+          <View style={styles.editBadge}>
+            {isUploading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="camera" size={16} color="#fff" />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* Real User Full Name (e.g. Justine Vilocura) */}
+        <Text style={styles.profileName}>{userData.name || 'User'}</Text>
         <Text style={styles.profileEmail}>{userData.email}</Text>
       </View>
 

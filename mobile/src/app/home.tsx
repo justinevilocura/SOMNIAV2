@@ -23,7 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const screenWidth = Dimensions.get("window").width;
 
 export default function Home() {
-  const [userData, setUserData] = useState({ name: '', email: '', user_id: '' });
+  const [userData, setUserData] = useState({ name: '', email: '', user_id: '', avatar: '' });
   const { readExerciseSession } = useExerciseSession(new Date());
   // sample Date '2025-05-29'
   const { readHeartRate } = useHeartRate(new Date());
@@ -61,8 +61,31 @@ export default function Home() {
       setUserData({
         name: authData.name || 'User',
         email: authData.email || '',
-        user_id: authData.user_id || ''
+        user_id: authData.user_id || '',
+        avatar: authData.avatar || '',
       });
+    }
+
+    // Refresh real user profile (real name & avatar) from backend
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      try {
+        const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+        const userRes = await fetch(`${backendUrl}/api/user/data`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const userJson = await userRes.json();
+        if (userJson.success && userJson.userData) {
+          setUserData(prev => ({
+            ...prev,
+            name: userJson.userData.name || prev.name,
+            email: userJson.userData.email || prev.email,
+            avatar: userJson.userData.avatar || prev.avatar,
+          }));
+        }
+      } catch (e) {
+        console.log('Error refreshing user profile in home:', e);
+      }
     }
 
     let isInitialized = false;
@@ -441,7 +464,10 @@ export default function Home() {
     <LinearGradient colors={['#1a1a2e', '#23234b']} style={styles.background}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Image source={require('../assets/images/default-avatar.png')} style={styles.avatar} />
+          <Image
+            source={userData.avatar ? { uri: userData.avatar } : require('../assets/images/default-avatar.png')}
+            style={styles.avatar}
+          />
           <View>
             <Text style={styles.greeting}>Welcome,</Text>
             <Text style={styles.profileName}>{userData.name}</Text>
