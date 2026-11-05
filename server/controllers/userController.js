@@ -18,6 +18,8 @@ export const getUserData = async (req,res)=>{
                 isAccountVerified : user.isAccountVerified,
                 gender: user.gender,
                 avatar: user.avatar || '',
+                sleepGoalBedtime: user.sleepGoalBedtime || '22:30',
+                sleepGoalDuration: user.sleepGoalDuration || 8,
             }
         });
 
