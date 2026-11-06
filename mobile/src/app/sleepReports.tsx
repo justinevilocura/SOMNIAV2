@@ -59,34 +59,57 @@ export default function SleepReports() {
             return sessionDate.toDateString() === date.toDateString();
           });
 
-          // Merge overlapping intervals to prevent double-counting (matching Web Dashboard)
-          const intervals = sessionsForDay
-            .map((s: any) => ({
-              start: new Date(s.startTime).getTime(),
-              end: new Date(s.endTime).getTime(),
-            }))
-            .filter((int: any) => !isNaN(int.start) && !isNaN(int.end) && int.end > int.start)
-            .sort((a: any, b: any) => a.start - b.start);
+          // Sort sessions by start time
+          const sortedSessions = [...sessionsForDay].sort(
+            (a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+          );
 
-          let dayHours = 0;
-          if (intervals.length > 0) {
-            const merged = [{ ...intervals[0] }];
-            for (let j = 1; j < intervals.length; j++) {
-              const prev = merged[merged.length - 1];
-              const curr = intervals[j];
-              if (curr.start <= prev.end) {
-                prev.end = Math.max(prev.end, curr.end);
-              } else {
-                merged.push({ ...curr });
-              }
-            }
-            const totalMs = merged.reduce((sum: number, int: any) => sum + (int.end - int.start), 0);
-            dayHours = totalMs / (1000 * 60 * 60);
-          } else {
-            sessionsForDay.forEach((s: any) => {
-              dayHours += (s.durationHours || 0);
+          // Filter out redundant sessions completely contained within another session (matching Web)
+          const uniqueDaySessions = sortedSessions.filter((sessionA: any, idxA: number) => {
+            const aStart = new Date(sessionA.startTime).getTime();
+            const aEnd = new Date(sessionA.endTime).getTime();
+            return !sortedSessions.some((sessionB: any, idxB: number) => {
+              if (idxA === idxB) return false;
+              const bStart = new Date(sessionB.startTime).getTime();
+              const bEnd = new Date(sessionB.endTime).getTime();
+              return bStart <= aStart && bEnd >= aEnd && (bEnd - bStart) > (aEnd - aStart);
             });
-          }
+          });
+
+          // Calculate net sleep duration in hours (excluding awake stages, exactly matching Web Dashboard)
+          const getSessionNetHours = (session: any) => {
+            if (session.durationHours !== undefined && session.durationHours !== null) {
+              return session.durationHours;
+            }
+            if (session.durationMinutes !== undefined && session.durationMinutes !== null) {
+              return session.durationMinutes / 60;
+            }
+            if (session.stages && session.stages.length > 0) {
+              let stageMs = 0;
+              session.stages.forEach((stage: any) => {
+                if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
+                  const s = new Date(stage.startTime).getTime();
+                  const e = new Date(stage.endTime).getTime();
+                  if (!isNaN(s) && !isNaN(e) && e > s) {
+                    stageMs += (e - s);
+                  }
+                }
+              });
+              if (stageMs > 0) return stageMs / (1000 * 60 * 60);
+            }
+            const start = new Date(session.startTime).getTime();
+            const end = new Date(session.endTime).getTime();
+            if (!isNaN(start) && !isNaN(end) && end > start) {
+              return (end - start) / (1000 * 60 * 60);
+            }
+            return 0;
+          };
+
+          // Sum net sleep duration across all valid sessions for this day
+          let dayHours = 0;
+          uniqueDaySessions.forEach((s: any) => {
+            dayHours += getSessionNetHours(s);
+          });
 
           // Round to 2 decimal places to avoid floating-point artifacts like 7.44999999999
           dayHours = Math.round(Math.min(dayHours, 24) * 100) / 100;
