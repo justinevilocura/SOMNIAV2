@@ -97,10 +97,26 @@ export const getLatestSleepSession = async (req, res) => {
       stagesCount: latestSession.stages?.length || 0
     });
 
-    // Calculate duration using wall-clock time (endTime - startTime) to match mobile app
-    const sessionMs = Math.max(0, new Date(latestSession.endTime) - new Date(latestSession.startTime));
+    // Calculate duration using net sleep time (excluding awake stage 1) to match mobile app exactly
+    let totalSleepMs = 0;
+    if (latestSession.stages && latestSession.stages.length > 0) {
+      latestSession.stages.forEach((stage) => {
+        if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
+          const stageStart = new Date(stage.startTime).getTime();
+          const stageEnd = new Date(stage.endTime).getTime();
+          if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
+            totalSleepMs += (stageEnd - stageStart);
+          }
+        }
+      });
+    }
 
-    const totalDurationMinutes = sessionMs / (1000 * 60);
+    // Fallback: if no stages, use wall-clock session duration
+    if (totalSleepMs === 0 && latestSession.startTime && latestSession.endTime) {
+      totalSleepMs = Math.max(0, new Date(latestSession.endTime) - new Date(latestSession.startTime));
+    }
+
+    const totalDurationMinutes = totalSleepMs / (1000 * 60);
     const totalDurationHours = Math.round((totalDurationMinutes / 60) * 100) / 100;
 
     console.log(`Single latest sleep session: ${Math.round(totalDurationMinutes)} minutes (${totalDurationHours} hours)`);

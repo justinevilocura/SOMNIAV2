@@ -88,19 +88,30 @@ export const getStepStats = async (req, res) => {
     console.log(`Found ${todayStepData.length} step records for today`);
     console.log(`Found ${allStepData.length} total step records for average calculation`);
 
-    // Calculate today's total steps by source and pick the dominant one
+    // Calculate today's total steps by source — prioritize wearable (Xiaomi/Mi/Samsung) to match mobile app
     const todayStepsBySource = {};
     todayStepData.forEach((record) => {
       const origin = record.dataOrigin || "unknown";
       if (!todayStepsBySource[origin]) todayStepsBySource[origin] = 0;
       todayStepsBySource[origin] += record.count || 0;
     });
-    
-    // Default to 0, then find the max across sources
+
+    // Priority: Xiaomi > Samsung > any other wearable > max source (same logic as mobile app)
+    const sourceKeys = Object.keys(todayStepsBySource);
+    const xiaomiSource = sourceKeys.find(s => s.toLowerCase().includes('xiaomi') || s.toLowerCase().includes('mi'));
+    const samsungSource = sourceKeys.find(s => s.toLowerCase().includes('samsung') || s.toLowerCase().includes('shealth'));
+
     let totalStepsToday = 0;
-    Object.values(todayStepsBySource).forEach(count => {
-      if (count > totalStepsToday) totalStepsToday = count;
-    });
+    if (xiaomiSource) {
+      totalStepsToday = todayStepsBySource[xiaomiSource];
+    } else if (samsungSource) {
+      totalStepsToday = todayStepsBySource[samsungSource];
+    } else {
+      // Fallback: pick the highest source
+      Object.values(todayStepsBySource).forEach(count => {
+        if (count > totalStepsToday) totalStepsToday = count;
+      });
+    }
 
     // Calculate overall average from all historical data
     let overallTotalSteps = 0;
