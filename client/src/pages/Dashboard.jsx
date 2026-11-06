@@ -277,6 +277,23 @@ const SleepHistoryView = () => {
     if (session.durationHours !== undefined && session.durationHours !== null) {
       return session.durationHours;
     }
+    if (session.durationMinutes !== undefined && session.durationMinutes !== null) {
+      return session.durationMinutes / 60;
+    }
+    // Net sleep from stages excluding AWAKE (1) and OUT_OF_BED (3)
+    if (session.stages && session.stages.length > 0) {
+      let stageMs = 0;
+      session.stages.forEach((stage) => {
+        if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
+          const s = new Date(stage.startTime).getTime();
+          const e = new Date(stage.endTime).getTime();
+          if (!isNaN(s) && !isNaN(e) && e > s) {
+            stageMs += (e - s);
+          }
+        }
+      });
+      if (stageMs > 0) return stageMs / (1000 * 60 * 60);
+    }
     const start = new Date(session.startTime).getTime();
     const end = new Date(session.endTime).getTime();
     if (!isNaN(start) && !isNaN(end) && end > start) {
@@ -303,30 +320,28 @@ const SleepHistoryView = () => {
         return sessionDate.toDateString() === date.toDateString();
       });
 
-      // Merge overlapping intervals for this day so no time is double-counted
-      const intervals = sessionsForDay
-        .map((s) => ({
-          start: new Date(s.startTime).getTime(),
-          end: new Date(s.endTime).getTime(),
-        }))
-        .filter((int) => !isNaN(int.start) && !isNaN(int.end) && int.end > int.start)
-        .sort((a, b) => a.start - b.start);
+      // Sort sessions by start time
+      const sortedSessions = [...sessionsForDay].sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      );
 
+      // Filter out redundant sessions completely contained within another session
+      const uniqueDaySessions = sortedSessions.filter((sessionA, idxA) => {
+        const aStart = new Date(sessionA.startTime).getTime();
+        const aEnd = new Date(sessionA.endTime).getTime();
+        return !sortedSessions.some((sessionB, idxB) => {
+          if (idxA === idxB) return false;
+          const bStart = new Date(sessionB.startTime).getTime();
+          const bEnd = new Date(sessionB.endTime).getTime();
+          return bStart <= aStart && bEnd >= aEnd && (bEnd - bStart) > (aEnd - aStart);
+        });
+      });
+
+      // Sum net sleep duration across all valid sessions for this day
       let dayDuration = 0;
-      if (intervals.length > 0) {
-        const merged = [{ ...intervals[0] }];
-        for (let j = 1; j < intervals.length; j++) {
-          const prev = merged[merged.length - 1];
-          const curr = intervals[j];
-          if (curr.start <= prev.end) {
-            prev.end = Math.max(prev.end, curr.end);
-          } else {
-            merged.push({ ...curr });
-          }
-        }
-        const totalMs = merged.reduce((sum, int) => sum + (int.end - int.start), 0);
-        dayDuration = totalMs / (1000 * 60 * 60);
-      }
+      uniqueDaySessions.forEach((s) => {
+        dayDuration += calculateSessionDuration(s);
+      });
 
       let qualitySum = 0;
       let qualityCount = 0;
@@ -782,19 +797,31 @@ const StatisticsView = () => {
   };
 
   const calculateSessionDuration = (session) => {
-    if (session.stages && session.stages.length > 0) {
-      return session.stages.reduce((total, stage) => {
-        const duration =
-          (new Date(stage.endTime) - new Date(stage.startTime)) /
-          (1000 * 60 * 60);
-        return total + duration;
-      }, 0);
-    } else {
-      return (
-        (new Date(session.endTime) - new Date(session.startTime)) /
-        (1000 * 60 * 60)
-      );
+    if (session.durationHours !== undefined && session.durationHours !== null) {
+      return session.durationHours;
     }
+    if (session.durationMinutes !== undefined && session.durationMinutes !== null) {
+      return session.durationMinutes / 60;
+    }
+    if (session.stages && session.stages.length > 0) {
+      let stageMs = 0;
+      session.stages.forEach((stage) => {
+        if (stage.startTime && stage.endTime && stage.stage !== 1 && stage.stage !== 3) {
+          const s = new Date(stage.startTime).getTime();
+          const e = new Date(stage.endTime).getTime();
+          if (!isNaN(s) && !isNaN(e) && e > s) {
+            stageMs += (e - s);
+          }
+        }
+      });
+      if (stageMs > 0) return stageMs / (1000 * 60 * 60);
+    }
+    const start = new Date(session.startTime).getTime();
+    const end = new Date(session.endTime).getTime();
+    if (!isNaN(start) && !isNaN(end) && end > start) {
+      return (end - start) / (1000 * 60 * 60);
+    }
+    return 0;
   };
 
   const calculateWeeklyStats = (sessions) => {
