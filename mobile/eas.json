@@ -10,7 +10,8 @@
       "node": "20.19.4",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://somniav2-production.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1087911574541-igmmhfckvfr41vpk9uertjea4g10qn9v.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1087911574541-igmmhfckvfr41vpk9uertjea4g10qn9v.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1087911574541-88bl14n8rvhvbhf95qrkfara50au83sn.apps.googleusercontent.com"
       },
       "android": {
         "buildType": "apk"
@@ -21,7 +22,8 @@
       "node": "20.19.4",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://somniav2-production.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1087911574541-igmmhfckvfr41vpk9uertjea4g10qn9v.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1087911574541-igmmhfckvfr41vpk9uertjea4g10qn9v.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1087911574541-88bl14n8rvhvbhf95qrkfara50au83sn.apps.googleusercontent.com"
       },
       "android": {
         "buildType": "apk"
@@ -32,7 +34,8 @@
       "node": "20.19.4",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://somniav2-production.up.railway.app",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1087911574541-igmmhfckvfr41vpk9uertjea4g10qn9v.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1087911574541-igmmhfckvfr41vpk9uertjea4g10qn9v.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1087911574541-88bl14n8rvhvbhf95qrkfara50au83sn.apps.googleusercontent.com"
       }
     }
   },
