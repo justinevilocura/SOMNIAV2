@@ -90,12 +90,12 @@ export default function Register() {
             autoCapitalize="none"
           />
         </View>
-        {/* Name */}
-        <Text style={styles.label}>Name</Text>
+        {/* Full Name */}
+        <Text style={styles.label}>Full Name</Text>
         <View style={styles.inputRow}>
           <TextInput
             style={styles.inputNew}
-            placeholder="Enter your name"
+            placeholder="Enter your full name"
             placeholderTextColor="#aaa"
             value={name}
             onChangeText={setName}
