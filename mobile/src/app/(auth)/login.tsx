@@ -279,19 +279,12 @@ export default function Login() {
                 {/* Social Buttons */}
                 <View style={styles.socialRow}>
                     <TouchableOpacity
-                        style={[styles.socialBtnFull, { marginRight: 6 }]}
+                        style={styles.socialBtnFull}
                         onPress={() => promptGoogleAsync()}
                         disabled={!googleRequest || isLoading}
                     >
                         <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
                         <Text style={styles.socialBtnText}>Google</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.socialBtnFull, { marginLeft: 6 }]}
-                        onPress={() => Toast.show({ type: 'info', text1: 'Coming Soon', text2: 'Facebook login is not yet available.' })}
-                    >
-                        <Image source={require('../../assets/images/facebook.png')} style={styles.socialIconFull} />
-                        <Text style={styles.socialBtnText}>Facebook</Text>
                     </TouchableOpacity>
                 </View>
             </View>

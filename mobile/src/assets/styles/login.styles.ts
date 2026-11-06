@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 0,
     justifyContent: 'center',
-    width: '48%',
+    width: '100%',
   },
   socialIconFull: {
     width: 22,
