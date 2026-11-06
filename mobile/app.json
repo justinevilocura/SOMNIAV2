@@ -28,6 +28,19 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.belleza.mobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "com.belleza.mobile",
+              "host": "oauth2redirect"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "permissions": [
         "android.permission.health.READ_BLOOD_PRESSURE",
         "android.permission.health.READ_EXERCISE",
