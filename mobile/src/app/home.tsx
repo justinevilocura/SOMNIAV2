@@ -33,7 +33,7 @@ export default function Home() {
   const [sleepDataRaw, setSleepDataRaw] = useState([]);
   const [stepsData, setStepsData] = useState([]);
   const [exerciseDataRaw, setExerciseDataRaw] = useState([]);
-  const [exerSession, setExerSession] = useState("No recent activities");
+  const [exerSession, setExerSession] = useState("No record of activity for today");
   const [exerType, setExerType] = useState("None");
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState("0 hours and 0 minutes");
@@ -168,7 +168,7 @@ export default function Home() {
         setExerType(exerciseName || 'Exercise');
       } else {
         setExerciseDataRaw([]);
-        setExerSession("No recent activities");
+        setExerSession("No record of activity for today");
         setExerType("None");
       }
 
@@ -320,51 +320,35 @@ export default function Home() {
       }
 
       // --- HEART RATE LOGIC ---
+      // BPM is strictly based on today's exercise session avg BPM.
+      // If no exercise session today → 0 BPM.
       setHeartRateData(heartRate || []);
-      if (heartRate && heartRate.length > 0) {
+      if (lastExerciseSession && heartRate && heartRate.length > 0) {
         const allSamples = heartRate.flatMap(record => (record?.samples && Array.isArray(record.samples)) ? record.samples : []).filter(Boolean);
-        // Use all heart rate samples regardless of date
         const validSamples = allSamples.filter(sample => sample?.time && typeof sample.beatsPerMinute === 'number');
 
-        if (validSamples.length > 0) {
-          let mostRecentSession: any = null;
-          if (lastExerciseSession && lastSleepSession) {
-            if (new Date(lastExerciseSession.endTime).getTime() > new Date(lastSleepSession.endTime).getTime()) {
-              mostRecentSession = lastExerciseSession;
-            } else {
-              mostRecentSession = lastSleepSession;
-            }
-          } else if (lastExerciseSession) {
-            mostRecentSession = lastExerciseSession;
-          } else if (lastSleepSession) {
-            mostRecentSession = lastSleepSession;
-          }
+        if (validSamples.length > 0 && lastExerciseSession.startTime && lastExerciseSession.endTime) {
+          const sessionStart = new Date(lastExerciseSession.startTime).getTime();
+          const sessionEnd = new Date(lastExerciseSession.endTime).getTime();
 
-          if (mostRecentSession && mostRecentSession.startTime && mostRecentSession.endTime) {
-            const sessionStart = new Date(mostRecentSession.startTime).getTime();
-            const sessionEnd = new Date(mostRecentSession.endTime).getTime();
-            
-            const sessionSamples = validSamples.filter(sample => {
-              const time = new Date(sample.time).getTime();
-              return time >= sessionStart && time <= sessionEnd;
-            });
+          const sessionSamples = validSamples.filter(sample => {
+            const time = new Date(sample.time).getTime();
+            return time >= sessionStart && time <= sessionEnd;
+          });
 
-            if (sessionSamples.length > 0) {
-              const sum = sessionSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
-              const avg = Math.floor(sum / sessionSamples.length);
-              setLatestHeartRate(avg);
-            } else {
-              const sortedSamples = [...validSamples].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-              setLatestHeartRate(sortedSamples[0]?.beatsPerMinute || 0);
-            }
+          if (sessionSamples.length > 0) {
+            const sum = sessionSamples.reduce((acc, curr) => acc + (curr.beatsPerMinute || 0), 0);
+            const avg = Math.floor(sum / sessionSamples.length);
+            setLatestHeartRate(avg);
           } else {
-            const sortedSamples = [...validSamples].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-            setLatestHeartRate(sortedSamples[0]?.beatsPerMinute || 0);
+            // Exercise session exists but no HR samples in that window → 0
+            setLatestHeartRate(0);
           }
         } else {
           setLatestHeartRate(0);
         }
       } else {
+        // No exercise session today → BPM is 0
         setLatestHeartRate(0);
       }
 
@@ -431,7 +415,7 @@ export default function Home() {
 
   const statBoxes = [
     {
-      label: hasExerciseToday ? exerSession : 'No recent activities',
+      label: hasExerciseToday ? exerSession : 'No record of activity for today',
       value: hasExerciseToday ? exerType : 'None',
       unit: '',
       icon: 'barbell-outline',
