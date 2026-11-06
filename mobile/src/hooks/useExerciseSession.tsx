@@ -4,11 +4,10 @@ import { TimeRangeFilter } from 'react-native-health-connect/lib/typescript/type
 
 export const useExerciseSession = (date: Date) => {
   const startDate = new Date(date);
-  startDate.setDate(startDate.getDate() - 7); // Look back 7 days
-  startDate.setHours(0, 0, 0, 0);
+  startDate.setHours(0, 0, 0, 0); // Today only — start of day
 
-  const endDate = new Date(date); // Clone for end
-  endDate.setHours(23, 59, 59, 999);
+  const endDate = new Date(date);
+  endDate.setHours(23, 59, 59, 999); // Today only — end of day
 
   const timeRangeFilter: TimeRangeFilter = {
     operator: 'between',
