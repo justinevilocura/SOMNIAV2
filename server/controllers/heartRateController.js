@@ -40,7 +40,45 @@ export const getHeartRateStats = async (req, res) => {
 
     console.log('Fetching heart rate data for user:', userId);
 
-    // Get all heart rate records for the user
+    // ── MATCH MOBILE APP LOGIC ──────────────────────────────────────────────
+    // BPM = avg BPM during TODAY's exercise session only.
+    // No exercise today → 0 BPM (identical to mobile home screen).
+
+    // Timezone-aware "today" (default UTC+8 Philippine time)
+    const tzOffsetMinutes = req.query.tzOffset !== undefined
+      ? parseInt(req.query.tzOffset)
+      : (req.headers['x-timezone-offset'] ? parseInt(req.headers['x-timezone-offset']) : -480);
+
+    const now = new Date();
+    const clientNow = new Date(now.getTime() - (tzOffsetMinutes * 60 * 1000));
+    const clientStartOfDay = new Date(clientNow);
+    clientStartOfDay.setUTCHours(0, 0, 0, 0);
+    const startOfToday = new Date(clientStartOfDay.getTime() + (tzOffsetMinutes * 60 * 1000));
+    const clientEndOfDay = new Date(clientNow);
+    clientEndOfDay.setUTCHours(23, 59, 59, 999);
+    const endOfToday = new Date(clientEndOfDay.getTime() + (tzOffsetMinutes * 60 * 1000));
+
+    // 1. Find today's exercise session
+    const todayExercise = await mongoose.model('ExerciseSession').findOne({
+      user: userId,
+      startTime: { $gte: startOfToday, $lte: endOfToday }
+    }).sort({ endTime: -1 });
+
+    // No exercise today → 0 BPM immediately (matches mobile)
+    if (!todayExercise) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          latestHeartRate: 0,
+          latestTimestamp: null,
+          trend: 'neutral',
+          trendValue: '0 bpm',
+          trendLabel: 'No activity recorded today'
+        }
+      });
+    }
+
+    // 2. Get all heart rate records for the user
     const heartRateData = await HeartRate.find({ user: userId }).sort({ startTime: -1 });
 
     console.log('Found ' + heartRateData.length + ' heart rate records');
@@ -53,62 +91,36 @@ export const getHeartRateStats = async (req, res) => {
           latestTimestamp: null,
           trend: 'neutral',
           trendValue: '0 bpm',
-          trendLabel: 'No heart rate data found'
+          trendLabel: 'No activity recorded today'
         }
       });
     }
 
-    // Get the most recent sleep/exercise session (matches mobile: latest session avg BPM)
-    const latestSleep = await mongoose.model('SleepSession').findOne({ user: userId }).sort({ endTime: -1 });
-    const latestExercise = await mongoose.model('ExerciseSession').findOne({ user: userId }).sort({ endTime: -1 });
-
-    // Pick the most recent session between sleep and exercise
-    let mostRecentSession = null;
-    if (latestSleep && latestExercise) {
-      mostRecentSession = new Date(latestExercise.endTime) > new Date(latestSleep.endTime)
-        ? latestExercise : latestSleep;
-    } else {
-      mostRecentSession = latestSleep || latestExercise;
-    }
-
-    // Flatten all samples from all records
+    // 3. Flatten all samples
     const allSamples = heartRateData.flatMap(record =>
       (record.samples || []).map(s => ({ ...s.toObject(), recordStart: record.startTime, recordEnd: record.endTime }))
     );
 
+    // 4. Filter samples within today's exercise session window
+    const sessionStart = new Date(todayExercise.startTime).getTime();
+    const sessionEnd = new Date(todayExercise.endTime).getTime();
+    const sessionSamples = allSamples.filter(sample => {
+      const t = new Date(sample.time || sample.timestamp).getTime();
+      return t >= sessionStart && t <= sessionEnd;
+    });
+
     let latestHeartRate = 0;
     let latestTimestamp = null;
 
-    if (mostRecentSession) {
-      const sessionStart = new Date(mostRecentSession.startTime).getTime();
-      const sessionEnd = new Date(mostRecentSession.endTime).getTime();
-
-      // Get samples within the most recent session window
-      const sessionSamples = allSamples.filter(sample => {
-        const t = new Date(sample.time || sample.timestamp).getTime();
-        return t >= sessionStart && t <= sessionEnd;
-      });
-
-      if (sessionSamples.length > 0) {
-        // Average BPM across all samples in the session (matches mobile)
-        const sum = sessionSamples.reduce((acc, s) => acc + (s.beatsPerMinute || 0), 0);
-        latestHeartRate = Math.round(sum / sessionSamples.length);
-        latestTimestamp = mostRecentSession.endTime;
-        console.log('Session avg BPM: ' + latestHeartRate + ' from ' + sessionSamples.length + ' samples');
-      }
+    if (sessionSamples.length > 0) {
+      const sum = sessionSamples.reduce((acc, s) => acc + (s.beatsPerMinute || 0), 0);
+      latestHeartRate = Math.round(sum / sessionSamples.length);
+      latestTimestamp = todayExercise.endTime;
+      console.log('Session avg BPM: ' + latestHeartRate + ' from ' + sessionSamples.length + ' samples');
     }
+    // Exercise exists today but no HR samples in that window → stays 0
 
-    // Fallback: use the most recent single sample if no session match
-    if (latestHeartRate === 0 && allSamples.length > 0) {
-      const sorted = allSamples.sort((a, b) =>
-        new Date(b.time || b.timestamp) - new Date(a.time || a.timestamp)
-      );
-      latestHeartRate = sorted[0].beatsPerMinute || 0;
-      latestTimestamp = sorted[0].time || sorted[0].timestamp;
-    }
-
-    // Trend label based on BPM value
-    const trendLabel = latestHeartRate > 0 ? 'Latest session avg BPM' : 'No heart rate recorded';
+    const trendLabel = latestHeartRate > 0 ? 'Latest session avg BPM' : 'No activity recorded today';
 
     return res.status(200).json({
       success: true,
