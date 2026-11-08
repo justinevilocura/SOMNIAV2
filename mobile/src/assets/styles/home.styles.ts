@@ -5,10 +5,29 @@ export interface Styles {
   container: ViewStyle;
   header: ViewStyle;
   headerLeft: ViewStyle;
+  menuButton: ViewStyle;
   avatar: ImageStyle;
   greeting: TextStyle;
   profileName: TextStyle;
   profileButton: ViewStyle;
+  drawerOverlay: ViewStyle;
+  drawerBackdrop: ViewStyle;
+  drawerContainer: ViewStyle;
+  drawerHeader: ViewStyle;
+  drawerBrand: ViewStyle;
+  drawerLogo: ImageStyle;
+  drawerCloseButton: ViewStyle;
+  drawerProfileSection: ViewStyle;
+  drawerAvatar: ImageStyle;
+  drawerUserName: TextStyle;
+  drawerUserEmail: TextStyle;
+  drawerDivider: ViewStyle;
+  drawerNavList: ViewStyle;
+  drawerNavItem: ViewStyle;
+  drawerNavText: TextStyle;
+  drawerFooter: ViewStyle;
+  drawerLogoutButton: ViewStyle;
+  drawerLogoutText: TextStyle;
   scrollView: ViewStyle;
   card: ViewStyle;
   cardTitle: TextStyle;
@@ -441,7 +460,127 @@ const styles = StyleSheet.create<Styles>({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-  }
+  },
+  menuButton: {
+    marginRight: 12,
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  drawerOverlay: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  drawerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  drawerContainer: {
+    width: '78%',
+    maxWidth: 320,
+    height: '100%',
+    backgroundColor: '#161c2e',
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    borderRightWidth: 1,
+    borderColor: 'rgba(162, 89, 255, 0.25)',
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  drawerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  drawerLogo: {
+    width: 110,
+    height: 32,
+  },
+  drawerCloseButton: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  drawerProfileSection: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+  drawerAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#a259ff',
+    marginBottom: 10,
+  },
+  drawerUserName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  drawerUserEmail: {
+    color: '#8b9bb4',
+    fontSize: 12,
+  },
+  drawerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 16,
+  },
+  drawerNavList: {
+    flex: 1,
+  },
+  drawerNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  drawerNavText: {
+    color: '#e2e8f0',
+    fontSize: 15,
+    fontWeight: '500',
+    marginLeft: 14,
+  },
+  drawerFooter: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  drawerLogoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 77, 109, 0.12)',
+  },
+  drawerLogoutText: {
+    color: '#ff4d6d',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 14,
+  },
 });
 
 export default styles; 

@@ -1,11 +1,10 @@
-import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, Dimensions, RefreshControl, Modal, Pressable } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import React, { useEffect, useState, useContext } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import styles from '../assets/styles/home.styles';
 import LinearGradient from 'react-native-linear-gradient';
-import BottomNav from '../components/BottomNav';
 import { LineChart } from 'react-native-chart-kit';
 import SleepReco from './sleepReco';
 import Diary from './diary';
@@ -23,6 +22,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const screenWidth = Dimensions.get("window").width;
 
 export default function Home() {
+  const router = useRouter();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userData, setUserData] = useState({ name: '', email: '', user_id: '', avatar: '' });
   const { readExerciseSession } = useExerciseSession(new Date());
   // sample Date '2025-05-29'
@@ -448,6 +449,13 @@ export default function Home() {
     <LinearGradient colors={['#1a1a2e', '#23234b']} style={styles.background}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setIsMenuOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="menu-outline" size={28} color="#fff" />
+          </TouchableOpacity>
           <Image
             source={userData.avatar ? { uri: userData.avatar } : require('../assets/images/default-avatar.png')}
             style={styles.avatar}
@@ -465,7 +473,7 @@ export default function Home() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 36 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -476,19 +484,19 @@ export default function Home() {
           />
         }
       >
-        <View style={{ paddingHorizontal: 16 }}>
-          <Text style={{
-            color: 'skyblue',
-            fontSize: 18,
-            fontWeight: 'bold',
-            textAlign: 'center',
-            marginBottom: 8,
-          }}>
-            Sleep Stages Throughout the Night
-          </Text>
-        </View>
         {selectedTab === 'home' && (
           <>
+            <View style={{ paddingHorizontal: 16 }}>
+              <Text style={{
+                color: 'skyblue',
+                fontSize: 18,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                marginBottom: 8,
+              }}>
+                Sleep Stages Throughout the Night
+              </Text>
+            </View>
             {sleepData.labels.length >= 2 && (sleepData.datasets[0]?.data?.length || 0) >= 2 && (
               <ScrollView horizontal nestedScrollEnabled={true}>
 
@@ -607,30 +615,124 @@ export default function Home() {
         {selectedTab === 'profile' && <Profile key={`profile-${refreshKey}`} />}
       </ScrollView>
 
-      <View style={styles.bottomNavContainer}>
-        <View style={styles.bottomNav}>
-          <BottomNav
-            onPress={() => setSelectedTab('home')}
-            icon={selectedTab === 'home' ? 'home' : 'home-outline'}
-            iconColor={selectedTab === 'home' ? '#a259ff' : '#fff'}
-            navName={<Text style={[styles.navText, selectedTab === 'home' && styles.navTextActive]}>Home</Text>} />
-          <BottomNav
-            onPress={() => setSelectedTab('recommendations')}
-            icon={selectedTab === 'recommendations' ? 'bulb' : 'bulb-outline'}
-            iconColor={selectedTab === 'recommendations' ? '#a259ff' : '#fff'}
-            navName={<Text style={[styles.navText, selectedTab === 'recommendations' && styles.navTextActive]}>Tips</Text>} />
-          <BottomNav
-            onPress={() => setSelectedTab('diary')}
-            icon={selectedTab === 'diary' ? 'journal' : 'journal-outline'}
-            iconColor={selectedTab === 'diary' ? '#a259ff' : '#fff'}
-            navName={<Text style={[styles.navText, selectedTab === 'diary' && styles.navTextActive]}>Diary</Text>} />
-          <BottomNav
-            onPress={() => setSelectedTab('profile')}
-            icon={selectedTab === 'profile' ? 'person' : 'person-outline'}
-            iconColor={selectedTab === 'profile' ? '#a259ff' : '#fff'}
-            navName={<Text style={[styles.navText, selectedTab === 'profile' && styles.navTextActive]}>Profile</Text>} />
+      {/* Side Menu Drawer Modal */}
+      <Modal
+        visible={isMenuOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsMenuOpen(false)}
+      >
+        <View style={styles.drawerOverlay}>
+          <Pressable
+            style={styles.drawerBackdrop}
+            onPress={() => setIsMenuOpen(false)}
+          />
+          <View style={styles.drawerContainer}>
+            {/* Drawer Header */}
+            <View style={styles.drawerHeader}>
+              <View style={styles.drawerBrand}>
+                <Image
+                  source={require('../assets/images/somnia.png')}
+                  style={styles.drawerLogo}
+                  resizeMode="contain"
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsMenuOpen(false)}
+                style={styles.drawerCloseButton}
+              >
+                <Ionicons name="close-outline" size={24} color="#aaa" />
+              </TouchableOpacity>
+            </View>
+
+            {/* User Profile Info in Drawer */}
+            <View style={styles.drawerProfileSection}>
+              <Image
+                source={userData.avatar ? { uri: userData.avatar } : require('../assets/images/default-avatar.png')}
+                style={styles.drawerAvatar}
+              />
+              <Text style={styles.drawerUserName} numberOfLines={1}>{userData.name || 'SOMNiA User'}</Text>
+              <Text style={styles.drawerUserEmail} numberOfLines={1}>{userData.email || ''}</Text>
+            </View>
+
+            <View style={styles.drawerDivider} />
+
+            {/* Menu Items */}
+            <ScrollView style={styles.drawerNavList} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setSelectedTab('home');
+                }}
+              >
+                <Ionicons name="home-outline" size={22} color="#a259ff" />
+                <Text style={styles.drawerNavText}>Home Dashboard</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/sleepReports');
+                }}
+              >
+                <Ionicons name="bar-chart-outline" size={22} color="#3b82f6" />
+                <Text style={styles.drawerNavText}>Sleep Reports</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setSelectedTab('diary');
+                }}
+              >
+                <Ionicons name="book-outline" size={22} color="#43e97b" />
+                <Text style={styles.drawerNavText}>Sleep Diary</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setSelectedTab('recommendations');
+                }}
+              >
+                <Ionicons name="bulb-outline" size={22} color="#ffd166" />
+                <Text style={styles.drawerNavText}>Sleep Tips</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setSelectedTab('profile');
+                }}
+              >
+                <Ionicons name="person-outline" size={22} color="#a259ff" />
+                <Text style={styles.drawerNavText}>Profile & Settings</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Logout button at bottom */}
+            <View style={styles.drawerFooter}>
+              <TouchableOpacity
+                style={styles.drawerLogoutButton}
+                onPress={async () => {
+                  setIsMenuOpen(false);
+                  await AsyncStorage.removeItem('token');
+                  await AsyncStorage.removeItem('authData');
+                  router.replace('/(auth)/login');
+                }}
+              >
+                <Ionicons name="log-out-outline" size={22} color="#ff4d6d" />
+                <Text style={styles.drawerLogoutText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
+      </Modal>
     </LinearGradient>
   );
 }
