@@ -255,6 +255,13 @@ export default function NotificationsScreen() {
     } catch (e) {
       console.error('Failed to load notification settings', e);
     }
+
+    // 4. Mark notifications as viewed to clear the red badge on the bell icon
+    try {
+      await AsyncStorage.setItem('lastViewedNotifications', new Date().toISOString());
+    } catch (e) {
+      console.error('Failed to update lastViewedNotifications', e);
+    }
   };
 
   const fetchSleepStats = async () => {

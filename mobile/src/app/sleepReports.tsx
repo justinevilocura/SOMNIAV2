@@ -454,14 +454,16 @@ const styles = StyleSheet.create({
   },
   badgeDot: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 2,
+    right: 2,
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: '#ef4444',
     borderWidth: 1.5,
     borderColor: '#0d0d1a',
+    zIndex: 10,
+    elevation: 6,
   },
   menuButton: {
     marginRight: 12,
