@@ -465,11 +465,22 @@ export default function Home() {
             <Text style={styles.profileName}>{userData.name}</Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={() => setSelectedTab('profile')}>
-          <Ionicons name="person-circle-outline" size={32} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => router.push('/notifications')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => setSelectedTab('profile')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-circle-outline" size={32} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView

@@ -5,7 +5,9 @@ export interface Styles {
   container: ViewStyle;
   header: ViewStyle;
   headerLeft: ViewStyle;
+  headerRight: ViewStyle;
   menuButton: ViewStyle;
+  notificationButton: ViewStyle;
   avatar: ImageStyle;
   greeting: TextStyle;
   profileName: TextStyle;
@@ -109,6 +111,16 @@ const styles = StyleSheet.create<Styles>({
   },
   headerLeft: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationButton: {
+    padding: 6,
+    marginRight: 4,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   avatar: {

@@ -230,11 +230,22 @@ export default function SleepReports() {
             <Text style={styles.profileName}>{userData.name || 'User'}</Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={() => router.replace({ pathname: '/home', params: { tab: 'profile' } })}>
-          <Ionicons name="person-circle-outline" size={32} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => router.push('/notifications')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={26} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => router.replace({ pathname: '/home', params: { tab: 'profile' } })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-circle-outline" size={32} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -425,6 +436,16 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationButton: {
+    padding: 6,
+    marginRight: 4,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   menuButton: {

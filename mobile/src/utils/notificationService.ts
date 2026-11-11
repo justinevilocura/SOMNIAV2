@@ -6,6 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -82,7 +84,6 @@ export const scheduleDailyNotification = async (
       body,
       sound: 'default',
       priority: Notifications.AndroidNotificationPriority.HIGH,
-      channelId: NOTIF_CHANNEL_ID,
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -114,7 +115,6 @@ export const scheduleWeeklyNotification = async (
       body,
       sound: 'default',
       priority: Notifications.AndroidNotificationPriority.HIGH,
-      channelId: NOTIF_CHANNEL_ID,
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
@@ -127,6 +127,77 @@ export const scheduleWeeklyNotification = async (
 
   await saveNotificationId(key, id);
   return id;
+};
+
+/**
+ * Schedule a daily 10:00 AM Sleep Update push notification.
+ * Message adapts based on the user's current 3-day sleep efficiency and data availability.
+ * Should be called each time fresh sleep data is loaded (e.g. on Notifications screen mount).
+ * Only schedules if the riskAlerts setting is enabled.
+ *
+ * @param efficiency  - 3-day avg efficiency as a percentage (0–100). Pass 0 if no data.
+ * @param loggedDays  - Number of days with sleep logged in the last 3-day window.
+ */
+export const scheduleSleepUpdateNotification = async (
+  efficiency: number,
+  loggedDays: number
+) => {
+  try {
+    // Check if the Sleep Updates toggle is enabled
+    const settingsStr = await AsyncStorage.getItem('notificationSettings');
+    const settings = settingsStr ? JSON.parse(settingsStr) : {};
+    if (!settings.riskAlerts) {
+      await cancelNotification('sleepUpdate');
+      return;
+    }
+
+    let title: string;
+    let body: string;
+
+    if (loggedDays === 0) {
+      // No data at all — prompt to sync
+      title = '🛌 Sleep Update';
+      body = 'No recent sleep data detected. Wear your smartwatch tonight and sync SOMNiA to track your sleep risk.';
+    } else if (loggedDays < 3) {
+      // Partial data — building towards full assessment
+      title = '🌙 Sleep Update';
+      body = `${loggedDays} of 3 nights logged. Keep syncing to unlock your full 3-day sleep risk assessment!`;
+    } else if (efficiency >= 85) {
+      // Optimal sleep
+      title = '✅ Sleep Update — Optimal';
+      body = `Your 3-day sleep efficiency is ${efficiency}%. Great job — keep up the routine!`;
+    } else if (efficiency >= 65) {
+      // Moderate risk
+      title = '⚠️ Sleep Update — Moderate Risk';
+      body = `Your 3-day sleep efficiency is ${efficiency}%. Some strain detected — check your SOMNiA report for recovery tips.`;
+    } else {
+      // High risk
+      title = '🔴 Sleep Alert — High Risk';
+      body = `Your 3-day sleep efficiency is critically low (${efficiency}%). Open SOMNiA now to review your sleep trend and risk assessment.`;
+    }
+
+    await scheduleDailyNotification('sleepUpdate', 10, 0, title, body);
+  } catch (e) {
+    console.error('scheduleSleepUpdateNotification error:', e);
+  }
+};
+
+/** Send an immediate test notification to verify device alerts work */
+export const sendTestNotification = async () => {
+  await setupNotificationChannel();
+  const granted = await requestNotificationPermissions();
+  if (!granted) {
+    throw new Error('Notification permission denied. Please allow notifications in phone Settings.');
+  }
+
+  return await Notifications.scheduleNotificationAsync({
+    content: {
+      title: '🌙 SOMNiA Alert',
+      body: 'Notifications are working! You will receive daily sleep reminders and tips.',
+      sound: 'default',
+    },
+    trigger: null,
+  });
 };
 
 /**
@@ -176,8 +247,7 @@ export const syncBedtimeNotification = async (hourOverride?: number, minuteOverr
 };
 
 /**
- * Sync all 3 notifications (Bedtime, Daily Sync, Weekly Insights)
- * based on saved settings in AsyncStorage.
+ * Sync all notifications based on saved settings in AsyncStorage.
  */
 export const syncAllNotifications = async () => {
   try {
@@ -185,14 +255,46 @@ export const syncAllNotifications = async () => {
     if (!settingsStr) return;
     const settings = JSON.parse(settingsStr);
 
-    // 1. Bedtime Reminder
+    // 1. Sleep Reminder (8:00 PM)
+    if (settings.sleepReminder) {
+      await scheduleDailyNotification(
+        'sleepReminder',
+        20,
+        0,
+        '⏰ Sleep Reminder',
+        "Don't forget to log your sleep tonight and keep your streak going!"
+      );
+    } else {
+      await cancelNotification('sleepReminder');
+    }
+
+    // 2. Bedtime Reminder
     if (settings.bedtimeReminder) {
       await syncBedtimeNotification();
     } else {
       await cancelNotification('bedtime');
     }
 
-    // 2. Daily Sync Reminder (8:00 AM)
+    // 3. Sleep Updates (10:00 AM) — message is set dynamically by scheduleSleepUpdateNotification()
+    // when fresh sleep data is loaded. Here we only cancel if the toggle is off.
+    if (!settings.riskAlerts) {
+      await cancelNotification('sleepUpdate');
+    }
+
+    // 4. Recovery Tips (6:00 PM)
+    if (settings.recoveryTips) {
+      await scheduleDailyNotification(
+        'recoveryTips',
+        18,
+        0,
+        '🌿 Sleep Recovery Tip',
+        'Try 10-minute breathing exercise before bed to slow down your heart rate.'
+      );
+    } else {
+      await cancelNotification('recoveryTips');
+    }
+
+    // 4. Daily Sync Reminder (8:00 AM)
     if (settings.syncReminder) {
       await scheduleDailyNotification(
         'sync',
@@ -205,7 +307,7 @@ export const syncAllNotifications = async () => {
       await cancelNotification('sync');
     }
 
-    // 3. Weekly Insights (Sunday 9:00 AM)
+    // 5. Weekly Insights (Sunday 9:00 AM)
     if (settings.weeklyInsights) {
       await scheduleWeeklyNotification(
         'weekly',
@@ -222,4 +324,3 @@ export const syncAllNotifications = async () => {
     console.error('syncAllNotifications error:', e);
   }
 };
-
