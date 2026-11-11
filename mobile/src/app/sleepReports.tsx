@@ -5,11 +5,13 @@ import LinearGradient from 'react-native-linear-gradient';
 import { BarChart } from 'react-native-chart-kit';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNotificationBadge } from '../hooks/useSleepRisk';
 
 const screenWidth = Dimensions.get('window').width;
 
 export default function SleepReports() {
   const router = useRouter();
+  const hasNotificationBadge = useNotificationBadge();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -237,6 +239,7 @@ export default function SleepReports() {
             activeOpacity={0.7}
           >
             <Ionicons name="notifications-outline" size={26} color="#fff" />
+            {hasNotificationBadge && <View style={styles.badgeDot} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.profileButton}
@@ -443,10 +446,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   notificationButton: {
+    position: 'relative',
     padding: 6,
     marginRight: 4,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  badgeDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
+    borderWidth: 1.5,
+    borderColor: '#0d0d1a',
   },
   menuButton: {
     marginRight: 12,

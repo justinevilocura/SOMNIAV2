@@ -18,11 +18,13 @@ import { useSleepSession } from '../hooks/useSleepSession';
 import { useSteps } from '../hooks/useSteps';
 import { syncToDB } from '../utils/syncToDB';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNotificationBadge } from '../hooks/useSleepRisk';
 
 const screenWidth = Dimensions.get("window").width;
 
 export default function Home() {
   const router = useRouter();
+  const hasNotificationBadge = useNotificationBadge();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userData, setUserData] = useState({ name: '', email: '', user_id: '', avatar: '' });
   const { readExerciseSession } = useExerciseSession(new Date());
@@ -467,11 +469,12 @@ export default function Home() {
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity
-            style={styles.notificationButton}
+            style={styles.notificationBellWrapper}
             onPress={() => router.push('/notifications')}
             activeOpacity={0.7}
           >
             <Ionicons name="notifications-outline" size={26} color="#fff" />
+            {hasNotificationBadge && <View style={styles.badgeDot} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.profileButton}

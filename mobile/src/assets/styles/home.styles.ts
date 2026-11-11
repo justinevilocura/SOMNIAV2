@@ -8,6 +8,8 @@ export interface Styles {
   headerRight: ViewStyle;
   menuButton: ViewStyle;
   notificationButton: ViewStyle;
+  notificationBellWrapper: ViewStyle;
+  badgeDot: ViewStyle;
   avatar: ImageStyle;
   greeting: TextStyle;
   profileName: TextStyle;
@@ -122,6 +124,24 @@ const styles = StyleSheet.create<Styles>({
     marginRight: 4,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  notificationBellWrapper: {
+    position: 'relative',
+    padding: 6,
+    marginRight: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ef4444',
+    borderWidth: 1.5,
+    borderColor: '#0d0d1a',
   },
   avatar: {
     width: 40,
