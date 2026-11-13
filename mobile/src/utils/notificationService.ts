@@ -255,20 +255,14 @@ export const syncAllNotifications = async () => {
     if (!settingsStr) return;
     const settings = JSON.parse(settingsStr);
 
-    // 1. Sleep Reminder (8:00 PM)
-    if (settings.sleepReminder) {
-      await scheduleDailyNotification(
-        'sleepReminder',
-        20,
-        0,
-        '⏰ Sleep Reminder',
-        "Don't forget to log your sleep tonight and keep your streak going!"
-      );
-    } else {
-      await cancelNotification('sleepReminder');
+    // 1. Permanently cancel legacy 8:00 PM sleepReminder
+    await cancelNotification('sleepReminder');
+    if (settings.sleepReminder !== undefined) {
+      delete settings.sleepReminder;
+      await AsyncStorage.setItem('notificationSettings', JSON.stringify(settings));
     }
 
-    // 2. Bedtime Reminder
+    // 2. Bedtime Reminder (triggers at your actual target bedtime)
     if (settings.bedtimeReminder) {
       await syncBedtimeNotification();
     } else {

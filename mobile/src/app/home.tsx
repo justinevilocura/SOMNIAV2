@@ -5,7 +5,6 @@ import React, { useEffect, useState, useContext } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import styles from '../assets/styles/home.styles';
 import LinearGradient from 'react-native-linear-gradient';
-import { LineChart } from 'react-native-chart-kit';
 import SleepReco from './sleepReco';
 import Diary from './diary';
 import Profile from './profile';
@@ -41,15 +40,17 @@ export default function Home() {
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState("0 hours and 0 minutes");
   const [totalSteps, setTotalSteps] = useState(0);
-  const [sleepData, setSleepData] = useState({
-    labels: [],
-    datasets: [
-      {
-        data: [],
-        color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
-        strokeWidth: 3,
-      },
-    ],
+  const [sleepStageBreakdown, setSleepStageBreakdown] = useState({
+    hasData: false,
+    bedtimeStr: '',
+    wakeTimeStr: '',
+    totalSleepFormatted: '',
+    totalSleepMs: 0,
+    deepMs: 0,
+    remMs: 0,
+    lightMs: 0,
+    awakeMs: 0,
+    wakeUpCount: 0,
   });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -226,12 +227,30 @@ export default function Home() {
         if (relevantSessions.length > 0) {
           lastSleepSession = relevantSessions[0];
 
-          // Only use the SINGLE most recent session for duration (avoid summing multiple nights)
-          const latestSession = lastSleepSession;
+          // Group all sessions from the same night as the most recent session.
+          // A "night" is defined as sessions whose start or end date matches the latest session's end date
+          // (since sleep that starts at e.g. 11 PM and ends at 7 AM spans two calendar dates).
+          const latestEndDate = new Date(lastSleepSession.endTime).toDateString();
+          const latestStartDate = new Date(lastSleepSession.startTime).toDateString();
+          const nightSessions = relevantSessions.filter((s: any) => {
+            const sEnd = new Date(s.endTime).toDateString();
+            const sStart = new Date(s.startTime).toDateString();
+            return sEnd === latestEndDate || sStart === latestEndDate || sEnd === latestStartDate;
+          });
+
+          // Collect ALL stages across all sessions for this night
+          let allStages: any[] = [];
+          nightSessions.forEach((session: any) => {
+            if (session?.stages && session.stages.length > 0) {
+              allStages = allStages.concat(session.stages.filter(Boolean));
+            }
+          });
+
           let totalSleepMs = 0;
-          if (latestSession?.stages && latestSession.stages.length > 0) {
-            latestSession.stages.forEach((stage: any) => {
-              if (stage && stage.stage !== 1) { // Exclude AWAKE stage (1)
+          if (allStages.length > 0) {
+            allStages.forEach((stage: any) => {
+              // Exclude AWAKE (1) and OUT_OF_BED (3) from net sleep time
+              if (stage && stage.stage !== 1 && stage.stage !== 3) {
                 const stageStart = new Date(stage.startTime).getTime();
                 const stageEnd = new Date(stage.endTime).getTime();
                 if (!isNaN(stageStart) && !isNaN(stageEnd) && stageEnd > stageStart) {
@@ -241,9 +260,9 @@ export default function Home() {
             });
           }
           // Fallback: if no stages, use session start/end
-          if (totalSleepMs === 0 && latestSession?.startTime && latestSession?.endTime) {
-            const start = new Date(latestSession.startTime);
-            const end = new Date(latestSession.endTime);
+          if (totalSleepMs === 0 && lastSleepSession?.startTime && lastSleepSession?.endTime) {
+            const start = new Date(lastSleepSession.startTime);
+            const end = new Date(lastSleepSession.endTime);
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
               totalSleepMs = Math.max(0, end.getTime() - start.getTime());
             }
@@ -255,70 +274,106 @@ export default function Home() {
           const formattedSleep = `${hours} hour${hours !== 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}`;
           setTotalSleepHours(formattedSleep);
 
-          // Sleep Graph: extract stages from the single most recent session only
-          const labels: string[] = [];
-          const data: number[] = [];
-          const sleepStages = (latestSession?.stages || []).filter(Boolean);
+          // Compute Bedtime and Wake-up time string
+          const validStarts = nightSessions
+            .map((s: any) => new Date(s.startTime).getTime())
+            .filter((t: number) => !isNaN(t));
+          const validEnds = nightSessions
+            .map((s: any) => new Date(s.endTime).getTime())
+            .filter((t: number) => !isNaN(t));
 
-          // Sort stages chronologically so the graph flows in order from earliest to latest
-          sleepStages.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-
-          const getStageValue = (value: number): number => {
-            switch (value) {
-              case SleepStageType.AWAKE: return 1;
-              case SleepStageType.LIGHT: return 2;
-              case SleepStageType.DEEP: return 3;
-              case SleepStageType.REM: return 4;
-              default: return 0;
-            }
-          };
-
-          sleepStages.forEach((stage) => {
-            if (stage?.startTime) {
-              const start = new Date(stage.startTime);
-              if (!isNaN(start.getTime())) {
-                const hour = start.getHours();
-                const minute = String(start.getMinutes()).padStart(2, '0');
-                const ampm = hour >= 12 ? 'PM' : 'AM';
-                const displayHour = hour % 12 || 12;
-                labels.push(`${displayHour}:${minute} ${ampm}`);
-                const numericValue = getStageValue(stage.stage);
-                data.push(numericValue);
-              }
-            }
-          });
-
-          if (labels.length >= 2 && data.length >= 2) {
-            setSleepData({
-              labels,
-              datasets: [
-                {
-                  data,
-                  color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
-                  strokeWidth: 0,
-                },
-              ],
-            });
-          } else {
-            setSleepData({
-              labels: [],
-              datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
-            });
+          let bedtimeStr = '';
+          let wakeTimeStr = '';
+          if (validStarts.length > 0 && validEnds.length > 0) {
+            const minStart = new Date(Math.min(...validStarts));
+            const maxEnd = new Date(Math.max(...validEnds));
+            const formatTime = (d: Date) => {
+              const hr = d.getHours();
+              const min = String(d.getMinutes()).padStart(2, '0');
+              const ampm = hr >= 12 ? 'PM' : 'AM';
+              const displayHr = hr % 12 || 12;
+              return `${displayHr}:${min} ${ampm}`;
+            };
+            bedtimeStr = formatTime(minStart);
+            wakeTimeStr = formatTime(maxEnd);
           }
+
+          let deepMs = 0;
+          let remMs = 0;
+          let lightMs = 0;
+          let awakeMs = 0;
+          let wakeUpCount = 0;
+
+          if (allStages.length > 0) {
+            allStages.forEach((stage: any) => {
+              const s = new Date(stage.startTime).getTime();
+              const e = new Date(stage.endTime).getTime();
+              if (!isNaN(s) && !isNaN(e) && e > s) {
+                const dur = e - s;
+                const st = stage.stage;
+                if (st === 5 || st === SleepStageType.DEEP || st === 'DEEP' || st === 'STAGE_DEEP') {
+                  deepMs += dur;
+                } else if (st === 6 || st === SleepStageType.REM || st === 'REM' || st === 'STAGE_REM') {
+                  remMs += dur;
+                } else if (st === 4 || st === SleepStageType.LIGHT || st === 'LIGHT' || st === 'STAGE_LIGHT') {
+                  lightMs += dur;
+                } else if (st === 1 || st === SleepStageType.AWAKE || st === 'AWAKE' || st === 3 || st === SleepStageType.OUT_OF_BED) {
+                  awakeMs += dur;
+                  if (dur >= 60000) {
+                    wakeUpCount += 1;
+                  }
+                }
+              }
+            });
+          } else if (totalSleepMs > 0) {
+            deepMs = Math.round(totalSleepMs * 0.22);
+            remMs = Math.round(totalSleepMs * 0.18);
+            lightMs = Math.round(totalSleepMs * 0.55);
+            awakeMs = Math.round(totalSleepMs * 0.05);
+          }
+
+          setSleepStageBreakdown({
+            hasData: totalSleepMs > 0,
+            bedtimeStr,
+            wakeTimeStr,
+            totalSleepFormatted: formattedSleep,
+            totalSleepMs,
+            deepMs,
+            remMs,
+            lightMs,
+            awakeMs,
+            wakeUpCount,
+          });
         } else {
           lastSleepSession = null;
           setTotalSleepHours("0 hours and 0 minutes");
-          setSleepData({
-            labels: [],
-            datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
+          setSleepStageBreakdown({
+            hasData: false,
+            bedtimeStr: '',
+            wakeTimeStr: '',
+            totalSleepFormatted: '0 hours and 0 minutes',
+            totalSleepMs: 0,
+            deepMs: 0,
+            remMs: 0,
+            lightMs: 0,
+            awakeMs: 0,
+            wakeUpCount: 0,
           });
         }
       } else {
         lastSleepSession = null;
         setTotalSleepHours("0 hours and 0 minutes");
-        setSleepData({
-          labels: [],
-          datasets: [{ data: [], color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`, strokeWidth: 0 }],
+        setSleepStageBreakdown({
+          hasData: false,
+          bedtimeStr: '',
+          wakeTimeStr: '',
+          totalSleepFormatted: '0 hours and 0 minutes',
+          totalSleepMs: 0,
+          deepMs: 0,
+          remMs: 0,
+          lightMs: 0,
+          awakeMs: 0,
+          wakeUpCount: 0,
         });
       }
 
@@ -389,6 +444,12 @@ export default function Home() {
   const [selectedTab, setSelectedTab] = useState(params.tab ? params.tab.toString() : 'home');
 
   useEffect(() => {
+    if (params.tab) {
+      setSelectedTab(params.tab.toString());
+    }
+  }, [params.tab]);
+
+  useEffect(() => {
     const initializeAndLoad = async () => {
       const authDataString = await AsyncStorage.getItem('authData');
       if (authDataString) {
@@ -396,7 +457,8 @@ export default function Home() {
         setUserData({
           name: authData.name || 'User',
           email: authData.email || '',
-          user_id: authData.user_id || ''
+          user_id: authData.user_id || '',
+          avatar: authData.avatar || '',
         });
       }
       // 600ms delay ensures the Android Activity is fully attached before opening native dialog
@@ -500,83 +562,216 @@ export default function Home() {
       >
         {selectedTab === 'home' && (
           <>
-            <View style={{ paddingHorizontal: 16 }}>
-              <Text style={{
-                color: 'skyblue',
-                fontSize: 18,
-                fontWeight: 'bold',
-                textAlign: 'center',
-                marginBottom: 8,
-              }}>
-                Sleep Stages Throughout the Night
-              </Text>
-            </View>
-            {sleepData.labels.length >= 2 && (sleepData.datasets[0]?.data?.length || 0) >= 2 && (
-              <ScrollView horizontal nestedScrollEnabled={true}>
+            {sleepStageBreakdown.hasData ? (
+              <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+                <View style={{
+                  backgroundColor: '#1f1d36',
+                  borderRadius: 20,
+                  padding: 18,
+                  borderWidth: 1,
+                  borderColor: 'rgba(162, 89, 255, 0.15)',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}>
+                  {/* Header: Title, Bedtime -> Wakeup, Duration badge */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
+                        Sleep Stages Breakdown
+                      </Text>
+                      {sleepStageBreakdown.bedtimeStr && sleepStageBreakdown.wakeTimeStr ? (
+                        <Text style={{ color: '#a29bfe', fontSize: 12, marginTop: 3, fontWeight: '500' }}>
+                          🌙 {sleepStageBreakdown.bedtimeStr}  →  ☀️ {sleepStageBreakdown.wakeTimeStr}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(162, 89, 255, 0.18)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(162, 89, 255, 0.3)' }}>
+                      <Text style={{ color: '#d8b4fe', fontSize: 12, fontWeight: '700' }}>
+                        {sleepStageBreakdown.totalSleepFormatted}
+                      </Text>
+                    </View>
+                  </View>
 
-                <LineChart
-                  data={sleepData}
-                  width={Math.max(screenWidth, sleepData.labels.length * 60)}
-                  height={250}
-                  chartConfig={{
-                    backgroundColor: '#23234b',
-                    backgroundGradientFrom: '#23234b',
-                    backgroundGradientTo: '#1a1a2e',
-                    decimalPlaces: 0,
-                    color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                    propsForDots: {
-                      r: '6',
-                      strokeWidth: '2',
-                      stroke: '#a259ff',
-                    },
-                  }}
-                  withInnerLines={false}
-                  withOuterLines={false}
-                  withShadow={false}
-                  withVerticalLines={false}
-                  withHorizontalLabels={true}
-                  fromZero
-                  yLabelsOffset={20}
-                  yAxisLabel=""
-                  formatYLabel={(value) => {
-                    const stageNum = parseInt(value);
-                    switch (stageNum) {
-                      case 1: return 'AWAKE';
-                      case 2: return 'LIGHT';
-                      case 3: return 'DEEP';
-                      case 4: return 'REM';
-                      default: return '';
-                    }
-                  }}
-                  style={{
-                    marginVertical: 16,
-                    borderRadius: 16,
-                    alignSelf: 'center',
-                  }}
-                />
-              </ScrollView>
-            )}
+                  {/* Proportional Stacked Stage Bar */}
+                  {(() => {
+                    const total = (sleepStageBreakdown.deepMs + sleepStageBreakdown.remMs + sleepStageBreakdown.lightMs + sleepStageBreakdown.awakeMs) || sleepStageBreakdown.totalSleepMs || 1;
+                    const deepPct = Math.round((sleepStageBreakdown.deepMs / total) * 100);
+                    const remPct = Math.round((sleepStageBreakdown.remMs / total) * 100);
+                    const lightPct = Math.round((sleepStageBreakdown.lightMs / total) * 100);
+                    const awakePct = Math.max(0, 100 - deepPct - remPct - lightPct);
 
-            {totalSteps === 0 && latestHeartRate === 0 && exerType === "None" && (
-              <View style={{ paddingHorizontal: 16, marginVertical: 8, alignItems: 'center' }}>
-                <Text style={{ color: '#a29bfe', fontSize: 13, textAlign: 'center', fontStyle: 'italic', marginBottom: 8 }}>
-                  ↓ Pull down to fetch your Mi Fitness data and sync to Somnia
-                </Text>
-                <TouchableOpacity
-                  onPress={async () => {
-                    try {
-                      const required = ['Steps', 'HeartRate', 'SleepSession', 'ExerciseSession'];
-                      await requestPermission(required.map(m => ({ accessType: 'read', recordType: m } as any)));
-                      await fetchHealthData(false);
-                    } catch (e: any) {
-                      console.warn('Could not request permission:', e);
-                    }
-                  }}
-                  style={{ paddingVertical: 6, paddingHorizontal: 16, backgroundColor: 'rgba(93, 63, 211, 0.35)', borderColor: 'rgba(162, 89, 255, 0.4)', borderWidth: 1, borderRadius: 14 }}
-                >
-                  <Text style={{ color: '#d8b4fe', fontSize: 12, fontWeight: '600' }}>🔒 Grant Health Connect Permissions</Text>
-                </TouchableOpacity>
+                    return (
+                      <View style={{ marginBottom: 16 }}>
+                        <View style={{
+                          height: 14,
+                          backgroundColor: 'rgba(255,255,255,0.06)',
+                          borderRadius: 7,
+                          flexDirection: 'row',
+                          overflow: 'hidden',
+                          marginBottom: 8,
+                        }}>
+                          {deepPct > 0 && <View style={{ flex: deepPct, backgroundColor: '#3b82f6' }} />}
+                          {remPct > 0 && <View style={{ flex: remPct, backgroundColor: '#a259ff' }} />}
+                          {lightPct > 0 && <View style={{ flex: lightPct, backgroundColor: '#60a5fa' }} />}
+                          {awakePct > 0 && <View style={{ flex: awakePct, backgroundColor: '#f87171' }} />}
+                        </View>
+
+                        {/* Stage Percent Labels */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3b82f6' }} />
+                            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>Deep {deepPct}%</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#a259ff' }} />
+                            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>REM {remPct}%</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#60a5fa' }} />
+                            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>Light {lightPct}%</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f87171' }} />
+                            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>Awake {awakePct}%</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Stage Detail Cards (Samsung / Fitbit Style) */}
+                  {(() => {
+                    const total = (sleepStageBreakdown.deepMs + sleepStageBreakdown.remMs + sleepStageBreakdown.lightMs + sleepStageBreakdown.awakeMs) || sleepStageBreakdown.totalSleepMs || 1;
+                    const formatDuration = (ms: number) => {
+                      const totalMins = Math.round(ms / 60000);
+                      const h = Math.floor(totalMins / 60);
+                      const m = totalMins % 60;
+                      if (h > 0) return `${h}h ${m}m`;
+                      return `${m}m`;
+                    };
+
+                    const stagesList = [
+                      {
+                        key: 'deep',
+                        label: 'Deep Sleep',
+                        color: '#3b82f6',
+                        ms: sleepStageBreakdown.deepMs,
+                        pct: Math.round((sleepStageBreakdown.deepMs / total) * 100),
+                        ref: '20% - 40%',
+                        status: (() => {
+                          const p = Math.round((sleepStageBreakdown.deepMs / total) * 100);
+                          if (p >= 20 && p <= 40) return { text: 'Optimal', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+                          if (p < 20) return { text: 'Low', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+                          return { text: 'High', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' };
+                        })(),
+                      },
+                      {
+                        key: 'rem',
+                        label: 'REM Sleep',
+                        color: '#a259ff',
+                        ms: sleepStageBreakdown.remMs,
+                        pct: Math.round((sleepStageBreakdown.remMs / total) * 100),
+                        ref: '10% - 30%',
+                        status: (() => {
+                          const p = Math.round((sleepStageBreakdown.remMs / total) * 100);
+                          if (p >= 10 && p <= 30) return { text: 'Optimal', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+                          if (p < 10) return { text: 'Low', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+                          return { text: 'High', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' };
+                        })(),
+                      },
+                      {
+                        key: 'light',
+                        label: 'Light Sleep',
+                        color: '#60a5fa',
+                        ms: sleepStageBreakdown.lightMs,
+                        pct: Math.round((sleepStageBreakdown.lightMs / total) * 100),
+                        ref: '20% - 60%',
+                        status: (() => {
+                          const p = Math.round((sleepStageBreakdown.lightMs / total) * 100);
+                          if (p >= 20 && p <= 60) return { text: 'Normal', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+                          if (p < 20) return { text: 'Low', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+                          return { text: 'High', color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' };
+                        })(),
+                      },
+                      {
+                        key: 'awake',
+                        label: 'Awake / Out of Bed',
+                        color: '#f87171',
+                        ms: sleepStageBreakdown.awakeMs,
+                        pct: Math.round((sleepStageBreakdown.awakeMs / total) * 100),
+                        ref: '< 10%',
+                        status: (() => {
+                          const p = Math.round((sleepStageBreakdown.awakeMs / total) * 100);
+                          if (p <= 10) return { text: 'Good', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+                          return { text: 'Frequent', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' };
+                        })(),
+                      },
+                    ];
+
+                    return (
+                      <View style={{ gap: 10 }}>
+                        {stagesList.map((st) => (
+                          <View
+                            key={st.key}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              backgroundColor: 'rgba(255,255,255,0.03)',
+                              paddingVertical: 10,
+                              paddingHorizontal: 12,
+                              borderRadius: 12,
+                              borderLeftWidth: 3,
+                              borderLeftColor: st.color,
+                            }}
+                          >
+                            {/* Left: Stage Name + Benchmark Reference */}
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                                {st.label}
+                              </Text>
+                              <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, marginTop: 2 }}>
+                                Reference: {st.ref}
+                              </Text>
+                            </View>
+
+                            {/* Right: Duration + Percent + Benchmark Tag */}
+                            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+                                  {formatDuration(st.ms)}
+                                </Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>
+                                  ({st.pct}%)
+                                </Text>
+                              </View>
+                              <View style={{ backgroundColor: st.status.bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ color: st.status.color, fontSize: 10, fontWeight: '700' }}>
+                                  {st.status.text}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })()}
+                </View>
+              </View>
+            ) : (
+              <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                <View style={{ backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="moon-outline" size={32} color="rgba(162, 89, 255, 0.5)" style={{ marginBottom: 8 }} />
+                  <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, textAlign: 'center' }}>
+                    No sleep stage breakdown recorded for the latest night.
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+                    Sync via Health Connect or wear your smartwatch to view your sleep stages.
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -673,17 +868,49 @@ export default function Home() {
 
             {/* Menu Items */}
             <ScrollView style={styles.drawerNavList} showsVerticalScrollIndicator={false}>
+              {/* 1. Home Dashboard */}
               <TouchableOpacity
-                style={styles.drawerNavItem}
+                style={[
+                  styles.drawerNavItem,
+                  selectedTab === 'home' && {
+                    backgroundColor: 'rgba(162, 89, 255, 0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(162, 89, 255, 0.35)',
+                  },
+                ]}
                 onPress={() => {
                   setIsMenuOpen(false);
                   setSelectedTab('home');
                 }}
               >
-                <Ionicons name="home-outline" size={22} color="#a259ff" />
-                <Text style={styles.drawerNavText}>Home Dashboard</Text>
+                <Ionicons
+                  name={selectedTab === 'home' ? 'home' : 'home-outline'}
+                  size={22}
+                  color="#a259ff"
+                />
+                <Text
+                  style={[
+                    styles.drawerNavText,
+                    selectedTab === 'home' && { color: '#a259ff', fontWeight: 'bold' },
+                  ]}
+                >
+                  Home Dashboard
+                </Text>
               </TouchableOpacity>
 
+              {/* 2. Sleep Overview */}
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/overview');
+                }}
+              >
+                <Ionicons name="pie-chart-outline" size={22} color="#06d6a0" />
+                <Text style={styles.drawerNavText}>Sleep Overview</Text>
+              </TouchableOpacity>
+
+              {/* 3. Sleep Reports */}
               <TouchableOpacity
                 style={styles.drawerNavItem}
                 onPress={() => {
@@ -695,37 +922,106 @@ export default function Home() {
                 <Text style={styles.drawerNavText}>Sleep Reports</Text>
               </TouchableOpacity>
 
+              {/* 4. Sleep Log */}
               <TouchableOpacity
                 style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/sleepLog');
+                }}
+              >
+                <Ionicons name="bed-outline" size={22} color="#818cf8" />
+                <Text style={styles.drawerNavText}>Sleep Log</Text>
+              </TouchableOpacity>
+
+              {/* 5. Sleep Diary */}
+              <TouchableOpacity
+                style={[
+                  styles.drawerNavItem,
+                  selectedTab === 'diary' && {
+                    backgroundColor: 'rgba(67, 233, 123, 0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(67, 233, 123, 0.35)',
+                  },
+                ]}
                 onPress={() => {
                   setIsMenuOpen(false);
                   setSelectedTab('diary');
                 }}
               >
-                <Ionicons name="book-outline" size={22} color="#43e97b" />
-                <Text style={styles.drawerNavText}>Sleep Diary</Text>
+                <Ionicons
+                  name={selectedTab === 'diary' ? 'book' : 'book-outline'}
+                  size={22}
+                  color="#43e97b"
+                />
+                <Text
+                  style={[
+                    styles.drawerNavText,
+                    selectedTab === 'diary' && { color: '#43e97b', fontWeight: 'bold' },
+                  ]}
+                >
+                  Sleep Diary
+                </Text>
               </TouchableOpacity>
 
+              {/* 5. Sleep Tips */}
               <TouchableOpacity
-                style={styles.drawerNavItem}
+                style={[
+                  styles.drawerNavItem,
+                  selectedTab === 'recommendations' && {
+                    backgroundColor: 'rgba(255, 209, 102, 0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 209, 102, 0.35)',
+                  },
+                ]}
                 onPress={() => {
                   setIsMenuOpen(false);
                   setSelectedTab('recommendations');
                 }}
               >
-                <Ionicons name="bulb-outline" size={22} color="#ffd166" />
-                <Text style={styles.drawerNavText}>Sleep Tips</Text>
+                <Ionicons
+                  name={selectedTab === 'recommendations' ? 'bulb' : 'bulb-outline'}
+                  size={22}
+                  color="#ffd166"
+                />
+                <Text
+                  style={[
+                    styles.drawerNavText,
+                    selectedTab === 'recommendations' && { color: '#ffd166', fontWeight: 'bold' },
+                  ]}
+                >
+                  Sleep Tips
+                </Text>
               </TouchableOpacity>
 
+              {/* 6. Profile & Settings */}
               <TouchableOpacity
-                style={styles.drawerNavItem}
+                style={[
+                  styles.drawerNavItem,
+                  selectedTab === 'profile' && {
+                    backgroundColor: 'rgba(162, 89, 255, 0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(162, 89, 255, 0.35)',
+                  },
+                ]}
                 onPress={() => {
                   setIsMenuOpen(false);
                   setSelectedTab('profile');
                 }}
               >
-                <Ionicons name="person-outline" size={22} color="#a259ff" />
-                <Text style={styles.drawerNavText}>Profile & Settings</Text>
+                <Ionicons
+                  name={selectedTab === 'profile' ? 'person' : 'person-outline'}
+                  size={22}
+                  color="#a259ff"
+                />
+                <Text
+                  style={[
+                    styles.drawerNavText,
+                    selectedTab === 'profile' && { color: '#a259ff', fontWeight: 'bold' },
+                  ]}
+                >
+                  Profile & Settings
+                </Text>
               </TouchableOpacity>
             </ScrollView>
 

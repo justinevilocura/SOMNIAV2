@@ -363,10 +363,43 @@ export default function SleepReports() {
 
               <TouchableOpacity
                 style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/overview');
+                }}
+              >
+                <Ionicons name="pie-chart-outline" size={22} color="#06d6a0" />
+                <Text style={styles.drawerNavText}>Sleep Overview</Text>
+              </TouchableOpacity>
+
+              {/* Active Tab: Sleep Reports */}
+              <TouchableOpacity
+                style={[
+                  styles.drawerNavItem,
+                  {
+                    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(59, 130, 246, 0.35)',
+                  },
+                ]}
                 onPress={() => setIsMenuOpen(false)}
               >
-                <Ionicons name="bar-chart-outline" size={22} color="#3b82f6" />
-                <Text style={styles.drawerNavText}>Sleep Reports</Text>
+                <Ionicons name="bar-chart" size={22} color="#3b82f6" />
+                <Text style={[styles.drawerNavText, { color: '#3b82f6', fontWeight: 'bold' }]}>
+                  Sleep Reports
+                </Text>
+              </TouchableOpacity>
+
+              {/* 4. Sleep Log */}
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/sleepLog');
+                }}
+              >
+                <Ionicons name="bed-outline" size={22} color="#818cf8" />
+                <Text style={styles.drawerNavText}>Sleep Log</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

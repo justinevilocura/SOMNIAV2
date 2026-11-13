@@ -1,17 +1,21 @@
 import { View, Text, TouchableOpacity, ScrollView, Modal, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
 import styles from '../assets/styles/diary.styles';
+
+const DIARY_STORAGE_KEY = 'sleepDiaryEntries';
 
 export default function Diary() {
   const [showDiaryModal, setShowDiaryModal] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [timePickerMode, setTimePickerMode] = useState('bedtime'); // 'bedtime' or 'wakeTime'
-  const [diaryEntries, setDiaryEntries] = useState([]); // Store all diary entries
-  const [diaryEntry, setDiaryEntry] = useState({
+  const [timePickerMode, setTimePickerMode] = useState<'bedtime' | 'wakeTime'>('bedtime');
+  const [diaryEntries, setDiaryEntries] = useState<any[]>([]);
+
+  const initialEntryState = {
     date: new Date(),
     bedtime: new Date(),
     wakeTime: new Date(),
@@ -27,12 +31,33 @@ export default function Diary() {
         breakfast: false,
         lunch: false,
         dinner: false,
-      }
+      },
     },
     diaryNotes: '',
-  });
+  };
 
-  const handleTimeChange = (event, selectedTime) => {
+  const [diaryEntry, setDiaryEntry] = useState(initialEntryState);
+
+  // Load persisted entries on mount
+  useEffect(() => {
+    loadDiaryEntries();
+  }, []);
+
+  const loadDiaryEntries = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(DIARY_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setDiaryEntries(parsed);
+        }
+      }
+    } catch (e) {
+      console.log('Error loading diary entries:', e);
+    }
+  };
+
+  const handleTimeChange = (event: any, selectedTime?: Date) => {
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
     }
@@ -45,7 +70,7 @@ export default function Diary() {
     }
   };
 
-  const handleDateChange = (event, selectedDate) => {
+  const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
@@ -54,53 +79,91 @@ export default function Diary() {
     }
   };
 
-  const formatTime = (date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatTime = (dateInput: any) => {
+    if (!dateInput) return '';
+    const d = typeof dateInput === 'string' || typeof dateInput === 'number' ? new Date(dateInput) : dateInput;
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString([], { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+  const formatDate = (dateInput: any) => {
+    if (!dateInput) return '';
+    const d = typeof dateInput === 'string' || typeof dateInput === 'number' ? new Date(dateInput) : dateInput;
+    return isNaN(d.getTime())
+      ? ''
+      : d.toLocaleDateString([], {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
   };
 
-  const handleSaveEntry = () => {
-    // Add the new entry to the diary entries array
-    setDiaryEntries([...diaryEntries, diaryEntry]);
-    
-    // Reset the form
-    setDiaryEntry({
-      date: new Date(),
-      bedtime: new Date(),
-      wakeTime: new Date(),
-      sleepQuality: 'Rested',
-      moodBeforeSleep: '😊',
-      lifestyleFactors: {
-        exercise: false,
-        caffeine: false,
-        alcohol: false,
-        screenTime: '0-1 hour',
-        stressLevel: 'Low',
-        meals: {
-          breakfast: false,
-          lunch: false,
-          dinner: false,
-        }
-      },
-      diaryNotes: '',
-    });
-    
-    // Close the modal
-    setShowDiaryModal(false);
-    
-    // Show notification
-    Toast.show({
-      type: 'success',
-      text1: 'Diary Added!',
-      text2: 'Your sleep diary entry was saved successfully.'
-    });
+  const handleSaveEntry = async () => {
+    try {
+      const newEntry = {
+        ...diaryEntry,
+        id: Date.now().toString(),
+        date: diaryEntry.date instanceof Date ? diaryEntry.date.toISOString() : diaryEntry.date,
+        bedtime: diaryEntry.bedtime instanceof Date ? diaryEntry.bedtime.toISOString() : diaryEntry.bedtime,
+        wakeTime: diaryEntry.wakeTime instanceof Date ? diaryEntry.wakeTime.toISOString() : diaryEntry.wakeTime,
+        savedAt: new Date().toISOString(),
+      };
+
+      const updatedEntries = [newEntry, ...diaryEntries];
+      setDiaryEntries(updatedEntries);
+      await AsyncStorage.setItem(DIARY_STORAGE_KEY, JSON.stringify(updatedEntries));
+
+      // Reset form
+      setDiaryEntry({
+        date: new Date(),
+        bedtime: new Date(),
+        wakeTime: new Date(),
+        sleepQuality: 'Rested',
+        moodBeforeSleep: '😊',
+        lifestyleFactors: {
+          exercise: false,
+          caffeine: false,
+          alcohol: false,
+          screenTime: '0-1 hour',
+          stressLevel: 'Low',
+          meals: {
+            breakfast: false,
+            lunch: false,
+            dinner: false,
+          },
+        },
+        diaryNotes: '',
+      });
+
+      setShowDiaryModal(false);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Diary Added!',
+        text2: 'Your sleep diary entry was saved successfully.',
+      });
+    } catch (e) {
+      console.error('Error saving diary entry:', e);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Could not save your diary entry.',
+      });
+    }
+  };
+
+  const handleDeleteEntry = async (indexToDelete: number) => {
+    try {
+      const updatedEntries = diaryEntries.filter((_, idx) => idx !== indexToDelete);
+      setDiaryEntries(updatedEntries);
+      await AsyncStorage.setItem(DIARY_STORAGE_KEY, JSON.stringify(updatedEntries));
+      Toast.show({
+        type: 'info',
+        text1: 'Entry Removed',
+        text2: 'Sleep diary entry deleted.',
+      });
+    } catch (e) {
+      console.error('Error deleting diary entry:', e);
+    }
   };
 
   return (
@@ -114,15 +177,78 @@ export default function Diary() {
         <Text style={styles.addDiaryButtonText}>Add New Entry</Text>
       </TouchableOpacity>
 
+      {/* Empty State */}
+      {diaryEntries.length === 0 && (
+        <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 28 }}>
+          <Ionicons name="book-outline" size={44} color="rgba(255, 255, 255, 0.25)" />
+          <Text style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 15, fontWeight: '600', marginTop: 10 }}>
+            No diary entries yet
+          </Text>
+          <Text style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+            Tap "Add New Entry" above to log your daily pre-sleep habits and notes.
+          </Text>
+        </View>
+      )}
+
       {/* Display saved entries */}
       {diaryEntries.map((entry, index) => (
-        <View key={index} style={styles.diaryEntry}>
-          <Text style={styles.diaryEntryDate}>{formatDate(entry.date)}</Text>
-          <View style={styles.diaryEntryTimes}>
-            <Text style={styles.diaryEntryTime}>Bedtime: {formatTime(entry.bedtime)}</Text>
-            <Text style={styles.diaryEntryTime}>Wake: {formatTime(entry.wakeTime)}</Text>
+        <View key={entry.id || index} style={styles.diaryEntry}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={styles.diaryEntryDate}>{formatDate(entry.date)}</Text>
+            <TouchableOpacity
+              onPress={() => handleDeleteEntry(index)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.diaryEntryNotes}>{entry.diaryNotes}</Text>
+
+          <View style={styles.diaryEntryTimes}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="moon-outline" size={14} color="#a259ff" />
+              <Text style={styles.diaryEntryTime}>Bed: {formatTime(entry.bedtime)}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="sunny-outline" size={14} color="#ffd166" />
+              <Text style={styles.diaryEntryTime}>Wake: {formatTime(entry.wakeTime)}</Text>
+            </View>
+          </View>
+
+          {/* Lifestyle Badges */}
+          {entry.lifestyleFactors && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 8 }}>
+              {entry.lifestyleFactors.exercise && (
+                <View style={{ backgroundColor: 'rgba(67, 233, 123, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: '#43e97b', fontSize: 11, fontWeight: '600' }}>🏃 Exercised</Text>
+                </View>
+              )}
+              {entry.lifestyleFactors.caffeine && (
+                <View style={{ backgroundColor: 'rgba(255, 209, 102, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: '#ffd166', fontSize: 11, fontWeight: '600' }}>☕ Late Caffeine</Text>
+                </View>
+              )}
+              {entry.lifestyleFactors.alcohol && (
+                <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: '#ef4444', fontSize: 11, fontWeight: '600' }}>🍷 Alcohol</Text>
+                </View>
+              )}
+              {entry.lifestyleFactors.screenTime && (
+                <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: '#60a5fa', fontSize: 11, fontWeight: '600' }}>📱 Screen: {entry.lifestyleFactors.screenTime}</Text>
+                </View>
+              )}
+              {entry.lifestyleFactors.stressLevel && (
+                <View style={{ backgroundColor: 'rgba(162, 89, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: '#c084fc', fontSize: 11, fontWeight: '600' }}>⚡ Stress: {entry.lifestyleFactors.stressLevel}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {entry.diaryNotes ? (
+            <Text style={styles.diaryEntryNotes}>{entry.diaryNotes}</Text>
+          ) : null}
         </View>
       ))}
 
@@ -236,7 +362,7 @@ export default function Diary() {
                       <Ionicons name="checkmark" size={20} color="#fff" />
                     )}
                   </View>
-                  <Text style={styles.checkboxLabel}>Did you exercise today?</Text>
+                  <Text style={styles.checkboxLabel}>Exercised today</Text>
                 </TouchableOpacity>
 
                 {/* Caffeine */}
