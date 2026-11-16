@@ -36,15 +36,18 @@ export default function Login() {
     const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
         androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
         scopes: ['profile', 'email'],
         redirectUri: makeRedirectUri({ scheme: 'com.belleza.mobile', path: 'oauth2redirect' }),
     });
 
     useEffect(() => {
         if (googleResponse?.type === 'success') {
-            const { access_token } = googleResponse.authentication!;
-            handleGoogleBackendLogin(access_token);
+            const accessToken =
+                googleResponse.authentication?.accessToken ||
+                (googleResponse.params as any)?.access_token;
+            if (accessToken) {
+                handleGoogleBackendLogin(accessToken);
+            }
         }
     }, [googleResponse]);
 

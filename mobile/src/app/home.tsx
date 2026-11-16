@@ -543,7 +543,7 @@ export default function Home() {
             onPress={() => setSelectedTab('profile')}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-circle-outline" size={32} color="#fff" />
+            <Ionicons name="settings-outline" size={26} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -934,7 +934,19 @@ export default function Home() {
                 <Text style={styles.drawerNavText}>Sleep Log</Text>
               </TouchableOpacity>
 
-              {/* 5. Sleep Diary */}
+              {/* 5. Sleep Goals */}
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/sleepGoals');
+                }}
+              >
+                <Ionicons name="moon-outline" size={22} color="#a259ff" />
+                <Text style={styles.drawerNavText}>Sleep Goals</Text>
+              </TouchableOpacity>
+
+              {/* 6. Sleep Diary */}
               <TouchableOpacity
                 style={[
                   styles.drawerNavItem,
@@ -993,53 +1005,7 @@ export default function Home() {
                   Sleep Tips
                 </Text>
               </TouchableOpacity>
-
-              {/* 6. Profile & Settings */}
-              <TouchableOpacity
-                style={[
-                  styles.drawerNavItem,
-                  selectedTab === 'profile' && {
-                    backgroundColor: 'rgba(162, 89, 255, 0.12)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(162, 89, 255, 0.35)',
-                  },
-                ]}
-                onPress={() => {
-                  setIsMenuOpen(false);
-                  setSelectedTab('profile');
-                }}
-              >
-                <Ionicons
-                  name={selectedTab === 'profile' ? 'person' : 'person-outline'}
-                  size={22}
-                  color="#a259ff"
-                />
-                <Text
-                  style={[
-                    styles.drawerNavText,
-                    selectedTab === 'profile' && { color: '#a259ff', fontWeight: 'bold' },
-                  ]}
-                >
-                  Profile & Settings
-                </Text>
-              </TouchableOpacity>
             </ScrollView>
-
-            {/* Logout button at bottom */}
-            <View style={styles.drawerFooter}>
-              <TouchableOpacity
-                style={styles.drawerLogoutButton}
-                onPress={async () => {
-                  setIsMenuOpen(false);
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('authData');
-                  router.replace('/(auth)/login');
-                }}
-              >
-                <Ionicons name="log-out-outline" size={22} color="#ff4d6d" />
-                <Text style={styles.drawerLogoutText}>Log Out</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>

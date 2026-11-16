@@ -9,6 +9,8 @@ export const getUserData = async (req,res)=>{
             res.json({sucess:false, message: 'User not found'})
         }
 
+        const calculatedAge = user.age || (user.birthdate ? Math.floor((new Date() - new Date(user.birthdate)) / 31557600000) : '');
+
         res.json({
             success:true,
             userData: {
@@ -16,7 +18,9 @@ export const getUserData = async (req,res)=>{
                 email: user.email,
                 birthdate: user.birthdate,  
                 isAccountVerified : user.isAccountVerified,
-                gender: user.gender,
+                gender: user.gender || 'Prefer not to say',
+                age: calculatedAge ? String(calculatedAge) : '',
+                avatar: user.avatar || '',
             }
         });
 
@@ -56,3 +60,48 @@ export const updateUserGoals = async (req, res) => {
         res.json({ success: false, message: error.message });
     }
 }
+
+export const updateUserProfile = async (req, res) => {
+    try {
+        const userId = req.body.userId || req.user?.id;
+        const { name, email, age, gender } = req.body;
+
+        if (!userId) {
+            return res.json({ success: false, message: 'User ID is required' });
+        }
+
+        const updateFields = {};
+        if (name !== undefined) updateFields.name = name;
+        if (email !== undefined) updateFields.email = email;
+        if (age !== undefined && age !== '') updateFields.age = Number(age);
+        if (gender !== undefined) updateFields.gender = gender;
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            updateFields,
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        const calculatedAge = updatedUser.age || (updatedUser.birthdate ? Math.floor((new Date() - new Date(updatedUser.birthdate)) / 31557600000) : '');
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            userData: {
+                name: updatedUser.name,
+                email: updatedUser.email,
+                birthdate: updatedUser.birthdate,
+                isAccountVerified: updatedUser.isAccountVerified,
+                gender: updatedUser.gender || 'Prefer not to say',
+                age: calculatedAge ? String(calculatedAge) : '',
+                avatar: updatedUser.avatar || '',
+            }
+        });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};

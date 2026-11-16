@@ -11,7 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -211,6 +211,7 @@ const buildNotifications = (stats?: SleepStats): NotificationItem[] => {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
 
   // Individual notification category states
   const [bedtimeReminder, setBedtimeReminder] = useState(true);
@@ -232,6 +233,12 @@ export default function NotificationsScreen() {
     initScreen();
     fetchSleepStats();
   }, []);
+
+  useEffect(() => {
+    if (params.openSettings === 'true') {
+      setIsSettingsOpen(true);
+    }
+  }, [params.openSettings]);
 
   const initScreen = async () => {
     // 1. Request permissions & setup notification channel
@@ -650,14 +657,7 @@ export default function NotificationsScreen() {
 
         <Text style={styles.headerTitle}>Notifications</Text>
 
-        <TouchableOpacity
-          onPress={() => setIsSettingsOpen(true)}
-          style={styles.headerIconButton}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="settings-outline" size={22} color="#ffffff" />
-        </TouchableOpacity>
+        <View style={styles.headerIconButton} />
       </View>
 
       {/* Permission warning banner (if notifications are disabled) */}
@@ -665,7 +665,7 @@ export default function NotificationsScreen() {
         <View style={styles.permBanner}>
           <Ionicons name="warning-outline" size={16} color="#ff8c42" />
           <Text style={styles.permBannerText}>
-            Notifications are disabled. Tap the settings icon above to enable reminders.
+            Notifications are disabled. Enable them in your phone settings to receive reminders.
           </Text>
         </View>
       )}

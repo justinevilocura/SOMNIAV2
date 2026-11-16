@@ -246,7 +246,7 @@ export default function SleepReports() {
             onPress={() => router.replace({ pathname: '/home', params: { tab: 'profile' } })}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-circle-outline" size={32} color="#fff" />
+            <Ionicons name="settings-outline" size={26} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -402,6 +402,18 @@ export default function SleepReports() {
                 <Text style={styles.drawerNavText}>Sleep Log</Text>
               </TouchableOpacity>
 
+              {/* 5. Sleep Goals */}
+              <TouchableOpacity
+                style={styles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/sleepGoals');
+                }}
+              >
+                <Ionicons name="moon-outline" size={22} color="#a259ff" />
+                <Text style={styles.drawerNavText}>Sleep Goals</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.drawerNavItem}
                 onPress={() => {
@@ -423,34 +435,7 @@ export default function SleepReports() {
                 <Ionicons name="bulb-outline" size={22} color="#ffd166" />
                 <Text style={styles.drawerNavText}>Sleep Tips</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.drawerNavItem}
-                onPress={() => {
-                  setIsMenuOpen(false);
-                  router.replace({ pathname: '/home', params: { tab: 'profile' } });
-                }}
-              >
-                <Ionicons name="person-outline" size={22} color="#a259ff" />
-                <Text style={styles.drawerNavText}>Profile & Settings</Text>
-              </TouchableOpacity>
             </ScrollView>
-
-            {/* Logout button at bottom */}
-            <View style={styles.drawerFooter}>
-              <TouchableOpacity
-                style={styles.drawerLogoutButton}
-                onPress={async () => {
-                  setIsMenuOpen(false);
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('authData');
-                  router.replace('/(auth)/login');
-                }}
-              >
-                <Ionicons name="log-out-outline" size={22} color="#ff4d6d" />
-                <Text style={styles.drawerLogoutText}>Log Out</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>

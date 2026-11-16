@@ -12,9 +12,11 @@ const userSchema = new mongoose.Schema({
     resetOtpExpireAt: { type: String, default: 0 },
     gender: {
     type: String,
-    enum: ["Male", "Female", "Prefer not to say"],
-    required: true,
+    enum: ["Male", "Female", "Prefer not to say", "Other"],
+    default: "Prefer not to say",
     },
+    age: { type: Number },
+    avatar: { type: String, default: '' },
     sleepGoalBedtime: { type: String, default: '22:30' },
     sleepGoalDuration: { type: Number, default: 8 },
 });

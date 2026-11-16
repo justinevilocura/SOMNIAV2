@@ -515,10 +515,10 @@ export default function SleepLog() {
           </TouchableOpacity>
           <TouchableOpacity
             style={homeStyles.profileButton}
-            onPress={() => router.push('/profile')}
+            onPress={() => router.replace({ pathname: '/home', params: { tab: 'profile' } })}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-circle-outline" size={28} color="#fff" />
+            <Ionicons name="settings-outline" size={26} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -955,7 +955,19 @@ export default function SleepLog() {
                 </Text>
               </TouchableOpacity>
 
-              {/* 5. Sleep Diary */}
+              {/* 5. Sleep Goals */}
+              <TouchableOpacity
+                style={homeStyles.drawerNavItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.push('/sleepGoals');
+                }}
+              >
+                <Ionicons name="moon-outline" size={22} color="#a259ff" />
+                <Text style={homeStyles.drawerNavText}>Sleep Goals</Text>
+              </TouchableOpacity>
+
+              {/* 6. Sleep Diary */}
               <TouchableOpacity
                 style={homeStyles.drawerNavItem}
                 onPress={() => {
@@ -978,35 +990,7 @@ export default function SleepLog() {
                 <Ionicons name="bulb-outline" size={22} color="#ffd166" />
                 <Text style={homeStyles.drawerNavText}>Sleep Tips</Text>
               </TouchableOpacity>
-
-              {/* 7. Profile & Settings */}
-              <TouchableOpacity
-                style={homeStyles.drawerNavItem}
-                onPress={() => {
-                  setIsMenuOpen(false);
-                  router.replace({ pathname: '/home', params: { tab: 'profile' } });
-                }}
-              >
-                <Ionicons name="person-outline" size={22} color="#a259ff" />
-                <Text style={homeStyles.drawerNavText}>Profile & Settings</Text>
-              </TouchableOpacity>
             </ScrollView>
-
-            {/* Logout button at bottom */}
-            <View style={homeStyles.drawerFooter}>
-              <TouchableOpacity
-                style={homeStyles.drawerLogoutButton}
-                onPress={async () => {
-                  setIsMenuOpen(false);
-                  await AsyncStorage.removeItem('token');
-                  await AsyncStorage.removeItem('authData');
-                  router.replace('/(auth)/login');
-                }}
-              >
-                <Ionicons name="log-out-outline" size={20} color="#ff4757" />
-                <Text style={homeStyles.drawerLogoutText}>Log Out</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
