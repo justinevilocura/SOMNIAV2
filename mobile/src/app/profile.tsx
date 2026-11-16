@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, ScrollView, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
@@ -7,6 +7,8 @@ import {
   requestPermission,
   getGrantedPermissions,
   openHealthConnectSettings,
+  getSdkStatus,
+  SdkAvailabilityStatus,
 } from 'react-native-health-connect';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +28,7 @@ export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isHealthConnectLive, setIsHealthConnectLive] = useState(false);
+  const [hcSdkStatus, setHcSdkStatus] = useState<number>(0); // 0=unknown,1=unavailable,2=update_required,3=available
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', age: '', gender: '' });
@@ -318,6 +321,14 @@ export default function Profile() {
     try {
       setIsChangingPass(true);
       const token = await AsyncStorage.getItem('token');
+      const authDataString = await AsyncStorage.getItem('authData');
+      let userId = '';
+      if (authDataString) {
+        try {
+          const authData = JSON.parse(authDataString);
+          userId = authData.user_id || authData.id || authData._id || '';
+        } catch (_) {}
+      }
       const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
       const res = await fetch(`${backendUrl}/api/user/change-password`, {
         method: 'POST',
@@ -326,18 +337,19 @@ export default function Profile() {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
+          userId,
           currentPassword: passwordForm.currentPassword,
           newPassword: passwordForm.newPassword,
         })
       });
 
       const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
+      if (contentType && contentType.includes('application/json')) {
         const json = await res.json();
         if (json.success) {
           Toast.show({
             type: 'success',
-            text1: 'Password Updated',
+            text1: 'Password Updated! 🔒',
             text2: 'Your password was changed successfully.',
           });
           setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -346,8 +358,8 @@ export default function Profile() {
           Alert.alert('Error', json.message || 'Could not change password.');
         }
       } else {
-        Alert.alert('Notice', 'Password change request sent.');
-        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        // Non-JSON response (e.g. 401 from expired token or server error)
+        Alert.alert('Session Expired', 'Please log out and log in again, then try changing your password.');
       }
     } catch (e: any) {
       Alert.alert('Error', 'Failed to update password. Please check your network connection.');
