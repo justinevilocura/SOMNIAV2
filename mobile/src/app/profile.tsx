@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator, TextInput, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
@@ -435,6 +435,22 @@ export default function Profile() {
     }
   };
 
+  const handleConnectAppleHealth = () => {
+    if (Platform.OS !== 'ios') {
+      Toast.show({
+        type: 'info',
+        text1: 'Apple Health',
+        text2: 'Apple Health is supported on Apple iOS devices.',
+      });
+      return;
+    }
+    Toast.show({
+      type: 'info',
+      text1: 'Apple Health',
+      text2: 'Connecting to Apple HealthKit...',
+    });
+  };
+
   return (
     <View style={styles.card}>
       {activeTab === 'profile' ? (
@@ -752,12 +768,13 @@ export default function Profile() {
           <Text style={[styles.sectionTitle, { fontSize: 15, marginTop: 20, marginBottom: 10, textAlign: 'left' }]}>
             Wearable Connections
           </Text>
+          {/* Health Connect (Android) */}
           <View style={styles.wearableRow}>
             <View style={styles.wearableIconContainer}>
               <Ionicons name="fitness" size={24} color="#a259ff" />
             </View>
             <View style={styles.wearableTextContainer}>
-              <Text style={styles.wearableTitle}>Google Fit / Health Connect</Text>
+              <Text style={styles.wearableTitle}>Health Connect</Text>
               {isHealthConnectLive ? (
                 <Text style={styles.wearableStatusLive}>● LIVE</Text>
               ) : (
@@ -771,6 +788,31 @@ export default function Profile() {
             >
               <Text style={[styles.connectButtonText, isHealthConnectLive && styles.connectedBadgeText]}>
                 {isHealthConnectLive ? '✓ Connected' : '+ Connect'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Apple Health (iOS) */}
+          <View style={styles.wearableRow}>
+            <View style={[styles.wearableIconContainer, { backgroundColor: '#fff' }]}>
+              <Ionicons name="logo-apple" size={24} color="#000" />
+            </View>
+            <View style={styles.wearableTextContainer}>
+              <Text style={styles.wearableTitle}>Apple Health</Text>
+              <Text style={styles.wearableStatusDisconnected}>
+                {Platform.OS === 'ios' ? 'Disconnected' : 'Available on iOS'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.connectButton,
+                Platform.OS !== 'ios' && { backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }
+              ]}
+              onPress={handleConnectAppleHealth}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.connectButtonText, Platform.OS !== 'ios' && { color: '#888' }]}>
+                {Platform.OS === 'ios' ? '+ Connect' : 'iOS Only'}
               </Text>
             </TouchableOpacity>
           </View>
