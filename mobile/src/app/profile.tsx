@@ -58,16 +58,29 @@ export default function Profile() {
 
   const loadUserData = async () => {
     try {
+      const isCustomized = await AsyncStorage.getItem('profileCustomized');
       // 1. Load from cache first for instantaneous render
       const authDataString = await AsyncStorage.getItem('authData');
+      let cachedName = '';
+      let cachedEmail = '';
+      let cachedAvatar = '';
+      let cachedAge = '';
+      let cachedGender = '';
+
       if (authDataString) {
         const authData = JSON.parse(authDataString);
+        cachedName = authData.name || '';
+        cachedEmail = authData.email || '';
+        cachedAvatar = authData.avatar || '';
+        cachedAge = authData.age || '';
+        cachedGender = authData.gender || '';
+
         setUserData({
-          name: authData.name || 'User',
-          email: authData.email || '',
-          avatar: authData.avatar || '',
-          age: authData.age || '',
-          gender: authData.gender || '',
+          name: cachedName || 'User',
+          email: cachedEmail,
+          avatar: cachedAvatar,
+          age: cachedAge,
+          gender: cachedGender,
         });
       }
 
@@ -82,22 +95,29 @@ export default function Profile() {
         if (res.ok && contentType && contentType.includes('application/json')) {
           const json = await res.json();
           if (json.success && json.userData) {
-            const freshData = {
-              name: json.userData.name || 'User',
-              email: json.userData.email || '',
-              avatar: json.userData.avatar || '',
-              age: json.userData.age ? String(json.userData.age) : '',
-              gender: json.userData.gender || '',
-            };
-            setUserData(freshData);
+            // If user customized their profile locally, DO NOT overwrite with stale server data!
+            const finalName = (isCustomized === 'true' && cachedName) ? cachedName : (json.userData.name || 'User');
+            const finalEmail = (isCustomized === 'true' && cachedEmail) ? cachedEmail : (json.userData.email || '');
+            const finalAge = (isCustomized === 'true' && cachedAge) ? cachedAge : (json.userData.age ? String(json.userData.age) : '');
+            const finalGender = (isCustomized === 'true' && cachedGender) ? cachedGender : (json.userData.gender || '');
+            const finalAvatar = json.userData.avatar || cachedAvatar || '';
+
+            setUserData({
+              name: finalName,
+              email: finalEmail,
+              avatar: finalAvatar,
+              age: finalAge,
+              gender: finalGender,
+            });
 
             // Update local cache so home and other screens have the real full name
             if (authDataString) {
               const parsed = JSON.parse(authDataString);
-              parsed.name = freshData.name;
-              parsed.avatar = freshData.avatar;
-              parsed.age = freshData.age;
-              parsed.gender = freshData.gender;
+              parsed.name = finalName;
+              parsed.email = finalEmail;
+              parsed.avatar = finalAvatar;
+              parsed.age = finalAge;
+              parsed.gender = finalGender;
               await AsyncStorage.setItem('authData', JSON.stringify(parsed));
             }
           }
@@ -214,6 +234,7 @@ export default function Profile() {
       }));
 
       // 2. Persist locally to phone storage
+      await AsyncStorage.setItem('profileCustomized', 'true');
       const authDataString = await AsyncStorage.getItem('authData');
       let userId = '';
       if (authDataString) {

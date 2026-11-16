@@ -100,13 +100,14 @@ export default function SleepLog() {
         const userRes = await fetch(`${backendUrl}/api/user/data`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        const isCustomized = await AsyncStorage.getItem('profileCustomized');
         const userJson = await userRes.json();
         if (userJson.success && userJson.userData) {
-          setUserData({
-            name: userJson.userData.name || 'User',
-            email: userJson.userData.email || '',
-            avatar: userJson.userData.avatar || '',
-          });
+          setUserData(prev => ({
+            name: (isCustomized === 'true' && prev.name) ? prev.name : (userJson.userData.name || 'User'),
+            email: (isCustomized === 'true' && prev.email) ? prev.email : (userJson.userData.email || ''),
+            avatar: userJson.userData.avatar || prev.avatar || '',
+          }));
         }
       }
     } catch (e) {

@@ -114,7 +114,17 @@ export const login = async (req, res) => {
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
         
-        return res.status(200).json({ success: true, message: "Login successful", token, user_id: user._id});
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            token,
+            user_id: user._id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            age: user.age,
+            gender: user.gender,
+        });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -360,6 +370,11 @@ export const googleLogin = async (req, res) => {
             success: true,
             token,
             user_id: user._id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            age: user.age,
+            gender: user.gender,
             message: 'Google login successful'
         });
 

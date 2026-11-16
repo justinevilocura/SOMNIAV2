@@ -60,13 +60,36 @@ export default function Login() {
                 { timeout: 15000 }
             );
             if (response.data.success) {
-                const { token, user_id } = response.data;
+                const { token, user_id, name, avatar, age, gender } = response.data;
                 await AsyncStorage.setItem('token', token);
+
+                let realName = name || '';
+                let userAvatar = avatar || '';
+                let userAge = age ? String(age) : '';
+                let userGender = gender || '';
+
+                try {
+                    const userRes = await fetch(`${backendUrl}/api/user/data`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const userJson = await userRes.json();
+                    if (userJson.success && userJson.userData) {
+                        realName = userJson.userData.name || realName;
+                        userAvatar = userJson.userData.avatar || userAvatar;
+                        userAge = userJson.userData.age ? String(userJson.userData.age) : userAge;
+                        userGender = userJson.userData.gender || userGender;
+                    }
+                } catch (_) {}
+
                 await AsyncStorage.setItem('authData', JSON.stringify({
                     token,
                     timestamp: new Date().getTime(),
                     isAuthenticated: true,
                     user_id,
+                    name: realName || 'User',
+                    avatar: userAvatar,
+                    age: userAge,
+                    gender: userGender,
                 }));
                 Toast.show({ type: 'success', text1: 'Welcome!', text2: 'Signed in with Google.' });
                 router.replace('/home');
@@ -116,13 +139,35 @@ export default function Login() {
 
                 if (token) {
                     await AsyncStorage.setItem('token', token);
+
+                    let realName = response.data.name || '';
+                    let userAvatar = response.data.avatar || '';
+                    let userAge = response.data.age ? String(response.data.age) : '';
+                    let userGender = response.data.gender || '';
+
+                    try {
+                        const userRes = await fetch(`${backendUrl}/api/user/data`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const userJson = await userRes.json();
+                        if (userJson.success && userJson.userData) {
+                            realName = userJson.userData.name || realName;
+                            userAvatar = userJson.userData.avatar || userAvatar;
+                            userAge = userJson.userData.age ? String(userJson.userData.age) : userAge;
+                            userGender = userJson.userData.gender || userGender;
+                        }
+                    } catch (_) {}
+
                     const authData = {
                         token,
                         timestamp: new Date().getTime(),
                         isAuthenticated: true,
                         email: email,
-                        name: email.split('@')[0],
-                        user_id: response.data.user_id
+                        name: realName || email.split('@')[0],
+                        user_id: response.data.user_id,
+                        avatar: userAvatar,
+                        age: userAge,
+                        gender: userGender,
                     };
                     await AsyncStorage.setItem('authData', JSON.stringify(authData));
 

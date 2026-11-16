@@ -78,12 +78,13 @@ export default function Home() {
         const userRes = await fetch(`${backendUrl}/api/user/data`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        const isCustomized = await AsyncStorage.getItem('profileCustomized');
         const userJson = await userRes.json();
         if (userJson.success && userJson.userData) {
           setUserData(prev => ({
             ...prev,
-            name: userJson.userData.name || prev.name,
-            email: userJson.userData.email || prev.email,
+            name: (isCustomized === 'true' && prev.name) ? prev.name : (userJson.userData.name || prev.name),
+            email: (isCustomized === 'true' && prev.email) ? prev.email : (userJson.userData.email || prev.email),
             avatar: userJson.userData.avatar || prev.avatar,
           }));
         }
