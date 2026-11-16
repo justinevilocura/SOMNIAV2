@@ -262,6 +262,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#121224',
+    borderWidth: 1,
+    borderColor: '#3a3a60',
+    borderRadius: 10,
+    paddingRight: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: '#fff',
+    fontSize: 14,
+  },
+  dangerCard: {
+    backgroundColor: 'rgba(255, 68, 68, 0.08)',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.3)',
+  },
+  dangerTitle: {
+    color: '#ff5252',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 6,
+  },
+  dangerDesc: {
+    color: '#bbb',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  deleteBtn: {
+    backgroundColor: '#ff4444',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
 
 export default styles;

@@ -1,4 +1,5 @@
 import userModel from "../models/userModel.js";
+import bcrypt from "bcryptjs";
 
 export const getUserData = async (req,res)=>{
     try {
@@ -101,6 +102,59 @@ export const updateUserProfile = async (req, res) => {
                 avatar: updatedUser.avatar || '',
             }
         });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const changePassword = async (req, res) => {
+    try {
+        const userId = req.body.userId || req.user?.id;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!userId) {
+            return res.json({ success: false, message: 'User ID is required' });
+        }
+        if (!currentPassword || !newPassword) {
+            return res.json({ success: false, message: 'Current and new password are required' });
+        }
+        if (newPassword.length < 6) {
+            return res.json({ success: false, message: 'New password must be at least 6 characters' });
+        }
+
+        const user = await userModel.findById(userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.json({ success: false, message: 'Incorrect current password' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = hashedPassword;
+        await user.save();
+
+        res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.body.userId || req.user?.id;
+        if (!userId) {
+            return res.json({ success: false, message: 'User ID is required' });
+        }
+
+        const deleted = await userModel.findByIdAndDelete(userId);
+        if (!deleted) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'Account deleted successfully' });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }

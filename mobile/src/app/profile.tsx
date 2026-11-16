@@ -15,7 +15,7 @@ import styles from '../assets/styles/profile.styles';
 
 export default function Profile() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'settings' | 'profile'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'profile' | 'account_privacy'>('settings');
   const [userData, setUserData] = useState({
     name: '',
     email: '',
@@ -28,7 +28,19 @@ export default function Profile() {
   const [isHealthConnectLive, setIsHealthConnectLive] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', email: '', age: '', gender: '' });
+  const [editForm, setEditForm] = useState({ name: '', age: '', gender: '' });
+
+  // Account and Privacy states
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
     loadUserData();
@@ -204,7 +216,6 @@ export default function Profile() {
   const handleStartEdit = () => {
     setEditForm({
       name: userData.name || '',
-      email: userData.email || '',
       age: userData.age || '',
       gender: userData.gender || 'Prefer not to say',
     });
@@ -220,7 +231,6 @@ export default function Profile() {
     try {
       setIsSaving(true);
       const updatedName = editForm.name.trim();
-      const updatedEmail = editForm.email.trim();
       const updatedAge = editForm.age;
       const updatedGender = editForm.gender;
 
@@ -228,7 +238,6 @@ export default function Profile() {
       setUserData(prev => ({
         ...prev,
         name: updatedName,
-        email: updatedEmail,
         age: updatedAge,
         gender: updatedGender,
       }));
@@ -242,7 +251,6 @@ export default function Profile() {
           const authData = JSON.parse(authDataString);
           userId = authData.user_id || authData.id || authData._id;
           authData.name = updatedName;
-          authData.email = updatedEmail;
           authData.age = updatedAge;
           authData.gender = updatedGender;
           await AsyncStorage.setItem('authData', JSON.stringify(authData));
@@ -262,7 +270,6 @@ export default function Profile() {
           body: JSON.stringify({
             userId,
             name: updatedName,
-            email: updatedEmail,
             age: updatedAge ? String(updatedAge) : '',
             gender: updatedGender,
           })
@@ -288,6 +295,106 @@ export default function Profile() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordForm.currentPassword) {
+      Alert.alert('Required', 'Please enter your current password.');
+      return;
+    }
+    if (!passwordForm.newPassword) {
+      Alert.alert('Required', 'Please enter your new password.');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      Alert.alert('Password Too Short', 'New password must be at least 6 characters long.');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      Alert.alert('Mismatch', 'New passwords do not match.');
+      return;
+    }
+
+    try {
+      setIsChangingPass(true);
+      const token = await AsyncStorage.getItem('token');
+      const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+      const res = await fetch(`${backendUrl}/api/user/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        })
+      });
+
+      const contentType = res.headers.get('content-type');
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const json = await res.json();
+        if (json.success) {
+          Toast.show({
+            type: 'success',
+            text1: 'Password Updated',
+            text2: 'Your password was changed successfully.',
+          });
+          setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+          setActiveTab('settings');
+        } else {
+          Alert.alert('Error', json.message || 'Could not change password.');
+        }
+      } else {
+        Alert.alert('Notice', 'Password change request sent.');
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      }
+    } catch (e: any) {
+      Alert.alert('Error', 'Failed to update password. Please check your network connection.');
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? This action cannot be undone and will wipe all your sleep and health records.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsDeletingAccount(true);
+              const token = await AsyncStorage.getItem('token');
+              const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+              await fetch(`${backendUrl}/api/user/delete-account`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {})
+                }
+              });
+
+              await AsyncStorage.clear();
+              Toast.show({
+                type: 'success',
+                text1: 'Account Deleted',
+                text2: 'Your account has been permanently removed.',
+              });
+              router.replace('/(auth)/login');
+            } catch (e) {
+              await AsyncStorage.clear();
+              router.replace('/(auth)/login');
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleLogout = async () => {
@@ -332,7 +439,7 @@ export default function Profile() {
     <View style={styles.card}>
       {activeTab === 'profile' ? (
         // ─── DEDICATED PROFILE VIEW ──────────────────────────────────────────
-        <View>
+        <View key="profile-details-view">
           <TouchableOpacity
             onPress={() => setActiveTab('settings')}
             style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
@@ -409,19 +516,6 @@ export default function Profile() {
                     onChangeText={(text) => setEditForm(prev => ({ ...prev, name: text }))}
                     placeholder="Enter full name"
                     placeholderTextColor="#666"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Email Address</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={editForm.email}
-                    onChangeText={(text) => setEditForm(prev => ({ ...prev, email: text }))}
-                    placeholder="Enter email address"
-                    placeholderTextColor="#666"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
                   />
                 </View>
 
@@ -504,16 +598,6 @@ export default function Profile() {
 
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelContainer}>
-                    <Ionicons name="mail-outline" size={17} color="#a259ff" />
-                    <Text style={styles.detailLabel}>Email Address</Text>
-                  </View>
-                  <Text style={styles.detailValue} numberOfLines={1}>
-                    {userData.email || 'Not set'}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelContainer}>
                     <Ionicons name="calendar-outline" size={17} color="#a259ff" />
                     <Text style={styles.detailLabel}>Age</Text>
                   </View>
@@ -535,9 +619,135 @@ export default function Profile() {
             )}
           </View>
         </View>
+      ) : activeTab === 'account_privacy' ? (
+        // ─── DEDICATED ACCOUNT AND PRIVACY VIEW ──────────────────────────────
+        <View key="account-privacy-view">
+          <TouchableOpacity
+            onPress={() => setActiveTab('settings')}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={22} color="#a259ff" />
+            <Text style={{ color: '#a259ff', fontSize: 15, fontWeight: '600', marginLeft: 6 }}>
+              Back to Settings
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.sectionTitle, { fontSize: 20, marginTop: 4, marginBottom: 16, textAlign: 'left' }]}>
+            Account and Privacy
+          </Text>
+
+          {/* Change Password Card */}
+          <View style={styles.personalDetailsCard}>
+            <View style={styles.detailsHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="key-outline" size={20} color="#a259ff" style={{ marginRight: 6 }} />
+                <Text style={styles.detailsTitle}>Change Password</Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 6 }}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Current Password</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    key={showCurrentPass ? 'curr-txt' : 'curr-sec'}
+                    style={styles.passwordInput}
+                    value={passwordForm.currentPassword}
+                    onChangeText={(t) => setPasswordForm(prev => ({ ...prev, currentPassword: t }))}
+                    placeholder="Enter current password"
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showCurrentPass}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={() => setShowCurrentPass(!showCurrentPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name={showCurrentPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>New Password</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    key={showNewPass ? 'new-txt' : 'new-sec'}
+                    style={styles.passwordInput}
+                    value={passwordForm.newPassword}
+                    onChangeText={(t) => setPasswordForm(prev => ({ ...prev, newPassword: t }))}
+                    placeholder="At least 6 characters"
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showNewPass}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={() => setShowNewPass(!showNewPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name={showNewPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    key={showConfirmPass ? 'conf-txt' : 'conf-sec'}
+                    style={styles.passwordInput}
+                    value={passwordForm.confirmPassword}
+                    onChangeText={(t) => setPasswordForm(prev => ({ ...prev, confirmPassword: t }))}
+                    placeholder="Re-type new password"
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showConfirmPass}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={() => setShowConfirmPass(!showConfirmPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name={showConfirmPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { marginTop: 8 }]}
+                onPress={handleChangePassword}
+                disabled={isChangingPass}
+                activeOpacity={0.7}
+              >
+                {isChangingPass ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Update Password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Delete Account (Danger Zone) */}
+          <View style={styles.dangerCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <Ionicons name="warning-outline" size={20} color="#ff5252" style={{ marginRight: 6 }} />
+              <Text style={styles.dangerTitle}>Delete Account</Text>
+            </View>
+            <Text style={styles.dangerDesc}>
+              Permanently delete your SOMNIA account and erase all sleep sessions, health data, and history. This cannot be undone.
+            </Text>
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={handleDeleteAccount}
+              disabled={isDeletingAccount}
+              activeOpacity={0.8}
+            >
+              {isDeletingAccount ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.deleteBtnText}>Delete My Account</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       ) : (
         // ─── MAIN SETTINGS HUB ───────────────────────────────────────────────
-        <View>
+        <View key="settings-hub-view">
           {/* Wearable Connections */}
           <Text style={[styles.sectionTitle, { fontSize: 15, marginTop: 20, marginBottom: 10, textAlign: 'left' }]}>
             Wearable Connections
@@ -578,23 +788,24 @@ export default function Profile() {
               </View>
               <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.4)" />
             </TouchableOpacity>
-          </View>
-
-          {/* Settings Options (Sleep Goals removed!) */}
-          <View style={[styles.settingsList, { marginTop: 10 }]}>
-            <TouchableOpacity
-              style={styles.settingItem}
-              onPress={() => router.push({ pathname: '/notifications', params: { openSettings: 'true' } })}
-            >
-              <Ionicons name="notifications-outline" size={24} color="#a259ff" />
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.settingText}>Notification Settings</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.4)" />
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.settingItem, { marginTop: 10 }]}
+              onPress={() => setActiveTab('account_privacy')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="shield-checkmark-outline" size={24} color="#a259ff" />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.settingText}>Account and Privacy</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.4)" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Settings Options */}
+          <View style={[styles.settingsList, { marginTop: 10 }]}>
+            <TouchableOpacity
+              style={styles.settingItem}
               onPress={handleLogout}
             >
               <Ionicons name="log-out-outline" size={24} color="#ff4444" />

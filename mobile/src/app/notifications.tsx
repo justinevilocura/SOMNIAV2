@@ -657,7 +657,14 @@ export default function NotificationsScreen() {
 
         <Text style={styles.headerTitle}>Notifications</Text>
 
-        <View style={styles.headerIconButton} />
+        <TouchableOpacity
+          onPress={() => setIsSettingsOpen(true)}
+          style={styles.headerIconButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="settings-outline" size={22} color="#ffffff" />
+        </TouchableOpacity>
       </View>
 
       {/* Permission warning banner (if notifications are disabled) */}
@@ -665,7 +672,7 @@ export default function NotificationsScreen() {
         <View style={styles.permBanner}>
           <Ionicons name="warning-outline" size={16} color="#ff8c42" />
           <Text style={styles.permBannerText}>
-            Notifications are disabled. Enable them in your phone settings to receive reminders.
+            Notifications are disabled. Tap the settings icon above to enable reminders.
           </Text>
         </View>
       )}
