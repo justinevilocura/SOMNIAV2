@@ -40,6 +40,7 @@ export default function Home() {
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState("0 hours and 0 minutes");
   const [totalSteps, setTotalSteps] = useState(0);
+  const [stepsSource, setStepsSource] = useState('Mi Fitness');
   const [sleepStageBreakdown, setSleepStageBreakdown] = useState({
     hasData: false,
     bedtimeStr: '',
@@ -177,6 +178,17 @@ export default function Home() {
         setExerType("None");
       }
 
+      // Check if user has an active wearable contributing to Health Connect (e.g. Mi Fitness / Xiaomi, Samsung Health)
+      const allHealthRecords = [...(sleep || []), ...(heartRate || []), ...(steps || []), ...(exerciseSession || [])];
+      const hasXiaomiWearable = allHealthRecords.some(r => {
+        const origin = (r?.metadata?.dataOrigin || '').toLowerCase();
+        return origin.includes('xiaomi') || origin.includes('mi');
+      });
+      const hasSamsungWearable = allHealthRecords.some(r => {
+        const origin = (r?.metadata?.dataOrigin || '').toLowerCase();
+        return origin.includes('shealth') || origin.includes('samsung');
+      });
+
       if (steps && steps.length > 0) {
         const stepsBySource: { [key: string]: typeof steps } = {};
         steps.forEach(record => {
@@ -189,23 +201,46 @@ export default function Home() {
 
         const sources = Object.keys(stepsBySource);
         selectedSteps = [];
-        
+
         const xiaomiSource = sources.find(s => s.toLowerCase().includes('xiaomi') || s.toLowerCase().includes('mi'));
         const samsungSource = sources.find(s => s.toLowerCase().includes('samsung') || s.toLowerCase().includes('shealth'));
-        
-        if (xiaomiSource) {
+
+        if (hasXiaomiWearable) {
+          // User's primary wearable is Mi Fitness / Xiaomi
+          if (xiaomiSource && stepsBySource[xiaomiSource]?.length > 0) {
+            selectedSteps = stepsBySource[xiaomiSource];
+          } else {
+            // Xiaomi watch recorded 0 steps today — keep at 0 to match the watch 1:1 (do NOT fall back to phone sensor)
+            selectedSteps = [];
+          }
+          setStepsSource('Mi Fitness');
+        } else if (hasSamsungWearable) {
+          // User's primary wearable is Samsung Health
+          if (samsungSource && stepsBySource[samsungSource]?.length > 0) {
+            selectedSteps = stepsBySource[samsungSource];
+          } else {
+            selectedSteps = [];
+          }
+          setStepsSource('Samsung Health');
+        } else if (xiaomiSource) {
           selectedSteps = stepsBySource[xiaomiSource];
+          setStepsSource('Mi Fitness');
         } else if (samsungSource) {
           selectedSteps = stepsBySource[samsungSource];
+          setStepsSource('Samsung Health');
         } else {
+          // No wearable detected — use phone sensor
           let maxCount = -1;
+          let detectedSource = 'Phone Sensor';
           sources.forEach(source => {
             const sum = stepsBySource[source].reduce((s, r) => s + (r?.count || 0), 0);
             if (sum > maxCount) {
               maxCount = sum;
               selectedSteps = stepsBySource[source];
+              detectedSource = source.toLowerCase().includes('fitness') ? 'Google Fit' : 'Phone Sensor';
             }
           });
+          setStepsSource(detectedSource);
         }
 
         setStepsData(selectedSteps);
@@ -214,6 +249,7 @@ export default function Home() {
       } else {
         setStepsData([]);
         setTotalSteps(0);
+        setStepsSource(hasXiaomiWearable ? 'Mi Fitness' : 'Phone Sensor');
       }
 
       let lastSleepSession: any = null;
@@ -493,6 +529,7 @@ export default function Home() {
       unit: '',
       icon: 'walk-outline',
       color: '#43e97b',
+      source: stepsSource,
     },
     {
       label: hasSleepToday ? 'Latest Sleep Hours' : 'latest sleep hours',
@@ -800,6 +837,9 @@ export default function Home() {
                     <Ionicons name={box.icon} size={28} color={box.color} style={{ marginBottom: 6 }} />
                     <Text style={[styles.statBoxValue, { color: box.color }]}>{box.value} <Text style={styles.statBoxUnit}>{box.unit}</Text></Text>
                     <Text style={styles.statBoxLabel}>{box.label}</Text>
+                    {(box as any).source ? (
+                      <Text style={{ fontSize: 10, color: '#8e8ea0', marginTop: 4, letterSpacing: 0.2 }}>● {(box as any).source}</Text>
+                    ) : null}
                   </View>
                 );
               })}
