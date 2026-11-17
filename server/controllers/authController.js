@@ -3,6 +3,53 @@ import jwt from 'jsonwebtoken';
 import userModel from '../models/userModel.js';
 import transporter from '../config/nodemailer.js';
 
+// ─── Brevo REST API Email Sender ─────────────────────────────────────────────
+// Bypasses Railway's firewall which blocks outbound SMTP ports 465/587.
+export const sendBrevoEmail = async ({ to, subject, textContent, htmlContent }) => {
+    const apiKey = process.env.BREVO_API_KEY || process.env.SMTP_PASS;
+    const senderEmail = process.env.SENDER_EMAIL || 'somniav2@gmail.com';
+
+    if (!apiKey) {
+        console.warn('Neither BREVO_API_KEY nor SMTP_PASS is configured; skipping email dispatch.');
+        return false;
+    }
+
+    const emailData = {
+        sender: { name: 'SOMNiA', email: senderEmail },
+        to: [{ email: to }],
+        subject,
+        textContent,
+    };
+    if (htmlContent) {
+        emailData.htmlContent = htmlContent;
+    }
+
+    try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': apiKey,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify(emailData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error('Brevo API Error:', response.status, errorData);
+            return false;
+        }
+
+        const data = await response.json();
+        console.log('Brevo email sent successfully:', data);
+        return true;
+    } catch (err) {
+        console.error('sendBrevoEmail network error:', err.message);
+        return false;
+    }
+};
+
 export const register = async (req, res) => {
     const { name, email, password, birthdate, gender  } = req.body;
 
@@ -14,8 +61,8 @@ export const register = async (req, res) => {
     const allowedGenders = ["Male", "Female", "Prefer not to say", "Other"];
     if (!allowedGenders.includes(gender)) {
         return res.status(400).json({
-        success: false,
-        message: "Invalid gender value",
+            success: false,
+            message: "Invalid gender value",
         });
     }
 
@@ -31,21 +78,12 @@ export const register = async (req, res) => {
             name,
             email,
             password: hashedPassword,
-            birthdate: new Date(birthdate)  ,
+            birthdate: new Date(birthdate),
             gender
         });
         await user.save();
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        
-        /*
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'None',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-        */
        
         res.cookie('token', token, {
             httpOnly: true,
@@ -53,39 +91,29 @@ export const register = async (req, res) => {
             sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
-        
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
-            to: email,
-            subject: 'Welcome to SOMNiA',
-            text: `Welcome to SOMNiA webiste. Your account has been 
-            created with email id: ${email}`,
-        }
 
-        try {
-            await transporter.sendMail(mailOptions);
-        } catch (emailError) {
-            console.log("Welcome email could not be sent (likely missing .env credentials), but registration will proceed:", emailError.message);
-        }
-
-        // Auto-send verification OTP
+        // Generate and store verification OTP
         const otp = String(Math.floor(100000 + Math.random() * 900000));
         user.verifyOtp = otp;
         user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
         await user.save();
 
-        const verifyMailOptions = {
-            from: process.env.SENDER_EMAIL,
+        // Dispatch verification email via Brevo REST API (HTTPS port 443)
+        sendBrevoEmail({
             to: email,
             subject: 'SOMNiA - Verify Your Email',
-            text: `Your verification code is: ${otp}\n\nPlease enter this code in the app to verify your email address.\n\nThis code expires in 24 hours.`,
-        };
-
-        try {
-            await transporter.sendMail(verifyMailOptions);
-        } catch (emailError) {
-            console.log("Verification OTP email could not be sent:", emailError.message);
-        }
+            textContent: `Welcome to SOMNiA! Your verification code is: ${otp}\n\nPlease enter this 6-digit code in the app to verify your email. This code expires in 24 hours.`,
+            htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; background-color: #0d1322; color: #ffffff; border-radius: 12px;">
+                    <h2 style="color: #4da3ff; text-align: center; margin-bottom: 8px;">Welcome to SOMNiA</h2>
+                    <p style="font-size: 15px; color: #d0d7de; text-align: center; margin-bottom: 24px;">Your verification code is:</p>
+                    <div style="text-align: center; margin: 24px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #ffffff; background: #1c2638; padding: 12px 24px; border-radius: 8px; border: 1px solid #30405c;">${otp}</span>
+                    </div>
+                    <p style="font-size: 13px; color: #8b949e; text-align: center;">This code will expire in 24 hours. If you did not create an account, please ignore this email.</p>
+                </div>
+            `
+        }).catch(e => console.error('Register email send failed:', e));
 
         return res.status(201).json({
             success: true,
@@ -178,45 +206,63 @@ export const logout = async (req, res) => {
 
 export const sendVerifyOtp = async (req, res) => {
     try {
-        const { userId } = req.body;
-        const user = await userModel.findById(userId);
+        const { userId, email } = req.body;
+        let user;
+        if (userId) {
+            user = await userModel.findById(userId);
+        } else if (email) {
+            user = await userModel.findOne({ email });
+        }
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
 
         if (user.isAccountVerified) {
             return res.json({ success: false, message: "Account Already Verified" });
         }
 
         const otp = String(Math.floor(100000 + Math.random() * 900000));
-
         user.verifyOtp = otp;
         user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;  
         await user.save();
 
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
+        await sendBrevoEmail({
             to: user.email,
-            subject: 'Account Verification OTP.',
-            text: `Your OTP is ${otp}. Verify your account using this OTP.`
-        };
+            subject: 'SOMNiA - Account Verification OTP',
+            textContent: `Your SOMNiA verification code is: ${otp}\n\nUse this code to verify your account. It expires in 24 hours.`,
+            htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; background-color: #0d1322; color: #ffffff; border-radius: 12px;">
+                    <h2 style="color: #4da3ff; text-align: center; margin-bottom: 8px;">SOMNiA Verification</h2>
+                    <p style="font-size: 15px; color: #d0d7de; text-align: center; margin-bottom: 24px;">Your verification code is:</p>
+                    <div style="text-align: center; margin: 24px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #ffffff; background: #1c2638; padding: 12px 24px; border-radius: 8px; border: 1px solid #30405c;">${otp}</span>
+                    </div>
+                    <p style="font-size: 13px; color: #8b949e; text-align: center;">This code will expire in 24 hours.</p>
+                </div>
+            `
+        });
 
-        await transporter.sendMail(mailOptions);
-        res.json({ success: true, message: "Verification OTP sent to email" });
-
+        return res.json({ success: true, message: "Verification OTP sent to email" });
     } catch (error) {
-
-        res.json({ success: false, message: error.message });
+        return res.json({ success: false, message: error.message });
     }
 };
 
-
 export const verifyEmail = async(req,res) =>{
-    const {userId, otp} = req.body;
+    const {userId, email, otp} = req.body;
 
-    if(!userId || !otp){
-        res.json({success:false, message: "Missing Details"});
+    if(!otp){
+        return res.json({success:false, message: "Missing OTP code"});
     }
 
     try {
-        const user = await userModel.findById(userId);
+        let user;
+        if (userId) {
+            user = await userModel.findById(userId);
+        } else if (email) {
+            user = await userModel.findOne({ email });
+        }
 
         if(!user){
             return res.json({success:false, message: "User not found."});
@@ -231,14 +277,13 @@ export const verifyEmail = async(req,res) =>{
         }
 
         user.isAccountVerified = true;
-        user.verifyOTp = '';
-        user.verifyOtpExprieAt = 0;
+        user.verifyOtp = '';
+        user.verifyOtpExpireAt = 0;
 
-        await user.save()
-        res.json({success: true, message: "Email verified successfully"});
+        await user.save();
+        return res.json({success: true, message: "Email verified successfully"});
     } catch (error) {
-        res.json({success:false, message:  error.message});
-
+        return res.json({success:false, message:  error.message});
     }
 }
 
@@ -252,7 +297,6 @@ export const isAuthenticated = async(req,res)=>{
     }
 }
 
-
 export const sendResetOtp = async(req,res)=>{
     const {email} = req.body;
 
@@ -260,8 +304,6 @@ export const sendResetOtp = async(req,res)=>{
         return res.json({success:false, message: "Email is required"});
     }
 
-    
-    
     try {
         const user = await userModel.findOne({email});
         
@@ -269,40 +311,21 @@ export const sendResetOtp = async(req,res)=>{
             return res.json({success: false, message: "User not found!"});
         }
 
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    user.resetOtp = otp;
-    user.resetOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;  
-    await user.save();
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        user.resetOtp = otp;
+        user.resetOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;  
+        await user.save();
 
-    const emailData = {
-        sender: { email: process.env.SENDER_EMAIL },
-        to: [{ email: user.email }],
-        subject: 'Password Reset OTP.',
-        textContent: `Your OTP for resetting your password is ${otp} \nUse this OTP to proceed with resetting your password.`
-    };
+        await sendBrevoEmail({
+            to: user.email,
+            subject: 'Password Reset OTP.',
+            textContent: `Your OTP for resetting your password is ${otp} \nUse this OTP to proceed with resetting your password.`
+        });
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-            'accept': 'application/json',
-            'api-key': process.env.BREVO_API_KEY,
-            'content-type': 'application/json'
-        },
-        body: JSON.stringify(emailData)
-    });
-
-    if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Brevo API Error:', errorData);
-        throw new Error('Failed to send email via API');
-    }
-
-    res.json({ success: true, message: "Otp sent to your email" });
-
+        return res.json({ success: true, message: "Otp sent to your email" });
     } catch (error) {
         console.error('sendResetOtp error:', error.message, error.code || '');
-        res.json({ success: false, message: error.message });
-
+        return res.json({ success: false, message: error.message });
     }
 }
 

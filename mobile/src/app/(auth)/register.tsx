@@ -141,6 +141,7 @@ export default function Register() {
       const response = await axios.post(`${backendUrl}/api/auth/register`, userData, {
         headers: { 'Content-Type': 'application/json' },
         withCredentials: true,
+        timeout: 15000,
       });
 
       console.log('Registration response:', response.data);

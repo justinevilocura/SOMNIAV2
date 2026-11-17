@@ -73,16 +73,15 @@ export default function VerifyEmail() {
 
     setIsVerifying(true);
     try {
-      const contentType = 'application/json';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token && token !== 'undefined' && token !== 'null') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await axios.post(
         `${backendUrl}/api/auth/verify-account`,
-        { otp: otpString },
-        {
-          headers: {
-            'Content-Type': contentType,
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { otp: otpString, email, userId: user_id },
+        { headers, timeout: 15000 }
       );
 
       if (response.data.success) {
@@ -113,15 +112,15 @@ export default function VerifyEmail() {
 
     setIsResending(true);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token && token !== 'undefined' && token !== 'null') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await axios.post(
         `${backendUrl}/api/auth/send-verify-otp`,
-        {},
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { email, userId: user_id },
+        { headers, timeout: 15000 }
       );
 
       if (response.data.success) {
@@ -141,10 +140,11 @@ export default function VerifyEmail() {
         });
       }
     } catch (error: any) {
+      const msg = error.response?.data?.message || 'Could not resend verification code.';
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Could not resend verification code.',
+        text2: msg,
       });
     } finally {
       setIsResending(false);
