@@ -549,7 +549,12 @@ export default function Register() {
             <View style={styles.socialRow}>
               <TouchableOpacity
                 style={styles.socialBtnFull}
-                onPress={() => promptGoogleAsync()}
+                onPress={async () => {
+                  try {
+                    await AsyncStorage.setItem('googleAuthOrigin', '/(auth)/register');
+                  } catch (_) {}
+                  promptGoogleAsync();
+                }}
                 disabled={!googleRequest || isLoading}
               >
                 <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />

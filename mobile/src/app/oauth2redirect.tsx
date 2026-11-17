@@ -1,16 +1,23 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function OAuth2RedirectHandler() {
   const router = useRouter();
 
   useEffect(() => {
-    // Gracefully route back to the login screen where the auth listener completes the flow
-    const timer = setTimeout(() => {
-      router.replace('/(auth)/login');
-    }, 300);
+    // Route back to whichever screen initiated Google Auth so its listener completes the login
+    const handleRedirect = async () => {
+      try {
+        const origin = (await AsyncStorage.getItem('googleAuthOrigin')) || '/(auth)/login';
+        router.replace(origin as any);
+      } catch {
+        router.replace('/(auth)/login');
+      }
+    };
 
+    const timer = setTimeout(handleRedirect, 200);
     return () => clearTimeout(timer);
   }, [router]);
 

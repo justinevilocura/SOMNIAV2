@@ -1,9 +1,11 @@
-export function redirectSystemPath({ path }: { path: string }) {
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export async function redirectSystemPath({ path }: { path: string }) {
   try {
     if (path.includes('oauth2redirect') || path.includes('oauthredirect')) {
-      // Intercept the OAuth deep link and return to the login screen
-      // where Google.useAuthRequest processes the response tokens
-      return '/(auth)/login';
+      // Return to whichever screen initiated the Google authentication
+      const origin = await AsyncStorage.getItem('googleAuthOrigin');
+      return origin || '/(auth)/login';
     }
     return path;
   } catch {

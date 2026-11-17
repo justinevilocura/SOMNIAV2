@@ -333,7 +333,12 @@ export default function Login() {
                 <View style={styles.socialRow}>
                     <TouchableOpacity
                         style={styles.socialBtnFull}
-                        onPress={() => promptGoogleAsync()}
+                        onPress={async () => {
+                            try {
+                                await AsyncStorage.setItem('googleAuthOrigin', '/(auth)/login');
+                            } catch (_) {}
+                            promptGoogleAsync();
+                        }}
                         disabled={!googleRequest || isLoading}
                     >
                         <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
