@@ -342,7 +342,7 @@ export default function Login() {
                         disabled={!googleRequest || isLoading}
                     >
                         <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
-                        <Text style={styles.socialBtnText}>Google</Text>
+                        <Text style={styles.socialBtnText}>Sign in with Google</Text>
                     </TouchableOpacity>
                 </View>
             </View>

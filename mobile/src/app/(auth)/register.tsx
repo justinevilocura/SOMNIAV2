@@ -112,7 +112,7 @@ export default function Register() {
           age: userAge,
           gender: userGender,
         }));
-        Toast.show({ type: 'success', text1: 'Welcome!', text2: 'Signed in with Google.' });
+        Toast.show({ type: 'success', text1: 'Welcome!', text2: 'Signed up with Google.' });
         router.replace('/home');
       } else {
         Toast.show({ type: 'error', text1: 'Google Sign Up Failed', text2: response.data.message });
@@ -558,7 +558,7 @@ export default function Register() {
                 disabled={!googleRequest || isLoading}
               >
                 <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
-                <Text style={styles.socialBtnText}>Google</Text>
+                <Text style={styles.socialBtnText}>Sign up with Google</Text>
               </TouchableOpacity>
             </View>
           </>
