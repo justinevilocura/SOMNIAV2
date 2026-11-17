@@ -246,6 +246,106 @@ const styles = StyleSheet.create({
     color: '#3578e5',
     fontWeight: '600',
   },
+  // In-place verification styles
+  verifyContainer: {
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 8,
+  },
+  verifyBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  verifyBackText: {
+    color: '#555',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  verifyIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#eef3ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  verifyTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  verifySubtitle: {
+    fontSize: 14,
+    color: '#777',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  verifyEmailHighlight: {
+    color: '#3578e5',
+    fontWeight: '600',
+  },
+  otpRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  otpBox: {
+    width: 44,
+    height: 50,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  otpBoxFilled: {
+    borderColor: '#3578e5',
+    backgroundColor: '#eef3ff',
+  },
+  verifySubmitBtn: {
+    backgroundColor: '#3578e5',
+    borderRadius: 10,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  verifySubmitBtnDisabled: {
+    backgroundColor: '#a8c4f0',
+  },
+  verifySubmitBtnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: 'bold',
+  },
+  resendRow: {
+    alignItems: 'center',
+  },
+  resendText: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 4,
+  },
+  resendLink: {
+    fontSize: 14,
+    color: '#3578e5',
+    fontWeight: '600',
+  },
+  resendLinkDisabled: {
+    color: '#aaa',
+  },
 });
 
 export default styles;

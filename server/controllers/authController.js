@@ -70,7 +70,55 @@ export const register = async (req, res) => {
         const existingUser = await userModel.findOne({ email });
 
         if (existingUser) {
-            return res.status(400).json({ success: false, message: "User already exists" });
+            // If already verified, reject duplicate registration
+            if (existingUser.isAccountVerified) {
+                return res.status(400).json({ success: false, message: "User already exists with this email" });
+            }
+
+            // If account was created but not verified yet, refresh details and resend code
+            const hashedPassword = await bcrypt.hash(password, 10);
+            existingUser.password = hashedPassword;
+            existingUser.name = name;
+            existingUser.birthdate = new Date(birthdate);
+            existingUser.gender = gender;
+
+            const otp = String(Math.floor(100000 + Math.random() * 900000));
+            existingUser.verifyOtp = otp;
+            existingUser.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+            await existingUser.save();
+
+            const token = jwt.sign({ id: existingUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Strict',
+                maxAge: 7 * 24 * 60 * 60 * 1000
+            });
+
+            // Dispatch verification email via Brevo REST API
+            sendBrevoEmail({
+                to: email,
+                subject: 'SOMNiA - Verify Your Email',
+                textContent: `Welcome back to SOMNiA! Your verification code is: ${otp}\n\nPlease enter this 6-digit code in the app to verify your email. This code expires in 24 hours.`,
+                htmlContent: `
+                    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; background-color: #0d1322; color: #ffffff; border-radius: 12px;">
+                        <h2 style="color: #4da3ff; text-align: center; margin-bottom: 8px;">SOMNiA Verification</h2>
+                        <p style="font-size: 15px; color: #d0d7de; text-align: center; margin-bottom: 24px;">Your verification code is:</p>
+                        <div style="text-align: center; margin: 24px 0;">
+                            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #ffffff; background: #1c2638; padding: 12px 24px; border-radius: 8px; border: 1px solid #30405c;">${otp}</span>
+                        </div>
+                        <p style="font-size: 13px; color: #8b949e; text-align: center;">This code will expire in 24 hours.</p>
+                    </div>
+                `
+            }).catch(e => console.error('Unverified resend email failed:', e));
+
+            return res.status(200).json({
+                success: true,
+                message: "Unverified account found. A new verification code has been sent to your email.",
+                token,
+                user_id: existingUser._id,
+            });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
