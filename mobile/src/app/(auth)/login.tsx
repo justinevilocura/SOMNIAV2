@@ -281,12 +281,12 @@ export default function Login() {
                         <Text style={styles.tabText}>Sign Up</Text>
                     </Pressable>
                 </View>
-                {/* Email */}
-                <Text style={styles.label}>Email</Text>
+                {/* Email Address */}
+                <Text style={styles.label}>Email Address</Text>
                 <View style={styles.inputRow}>
                     <TextInput
                         style={styles.inputNew}
-                        placeholder="Enter your email"
+                        placeholder="Enter your email address"
                         placeholderTextColor="#aaa"
                         value={email}
                         onChangeText={setEmail}

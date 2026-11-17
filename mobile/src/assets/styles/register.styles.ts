@@ -191,6 +191,61 @@ const styles = StyleSheet.create({
     color: '#222',
     fontWeight: '500',
   },
+  // Birthday & Gender side-by-side row
+  birthdayGenderRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  // Gender picker modal
+  genderModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  genderModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    width: '80%',
+    maxWidth: 320,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  genderModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  genderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  genderOptionActive: {
+    backgroundColor: '#eef3ff',
+  },
+  genderOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  genderOptionTextActive: {
+    color: '#3578e5',
+    fontWeight: '600',
+  },
 });
 
 export default styles;

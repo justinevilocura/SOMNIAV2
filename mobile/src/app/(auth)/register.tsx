@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Image, TextInput, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, Image, TextInput, Pressable, Platform, Modal, FlatList, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -10,6 +10,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -19,6 +20,12 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [birthdate, setBirthdate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [gender, setGender] = useState('Prefer not to say');
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
+
+  const genderOptions = ['Male', 'Female', 'Prefer not to say', 'Other'];
 
   const router = useRouter();
   const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
@@ -112,10 +119,23 @@ export default function Register() {
       return;
     }
 
+    if (!birthdate) {
+      Toast.show({
+        type: 'error',
+        text1: 'Please select your birthday!',
+      });
+      return;
+    }
+
     console.log('Starting registration...');
     setIsLoading(true);
-    // Added default birthdate and gender because the backend requires them
-    const userData = { email, name, password, birthdate: '2000-01-01', gender: 'Prefer not to say' };
+    const userData = {
+      email,
+      name,
+      password,
+      birthdate: birthdate.toISOString().split('T')[0],
+      gender,
+    };
     try {
       console.log('Sending request to:', `${backendUrl}/api/auth/register`);
       const response = await axios.post(`${backendUrl}/api/auth/register`, userData, {
@@ -148,6 +168,11 @@ export default function Register() {
       colors={['#101522', '#18213a', '#2d325a']}
       style={{ flex: 1 }}
     >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.headerContainer}>
         <Image source={require('../../assets/images/somnia.png')} style={styles.logo} resizeMode="contain" />
       </View>
@@ -158,19 +183,6 @@ export default function Register() {
             <Text style={styles.tabText}>Log In</Text>
           </Pressable>
           <View style={[styles.tab, styles.tabActive]}><Text style={styles.tabTextActive}>Sign Up</Text></View>
-        </View>
-        {/* Email */}
-        <Text style={styles.label}>Email</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.inputNew}
-            placeholder="Enter your email"
-            placeholderTextColor="#aaa"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
         </View>
         {/* Full Name */}
         <Text style={styles.label}>Full Name</Text>
@@ -184,6 +196,113 @@ export default function Register() {
             autoCapitalize="words"
           />
         </View>
+        {/* Email Address */}
+        <Text style={styles.label}>Email Address</Text>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.inputNew}
+            placeholder="Enter your email address"
+            placeholderTextColor="#aaa"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+        {/* Birthday & Gender Row */}
+        <View style={styles.birthdayGenderRow}>
+          {/* Birthday */}
+          <View style={styles.halfInput}>
+            <Text style={styles.label}>Birthday</Text>
+            <TouchableOpacity
+              style={styles.inputRow}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Icon name="calendar-outline" size={20} color="#888" style={{ marginRight: 8 }} />
+              <Text style={{ flex: 1, fontSize: 15, color: birthdate ? '#222' : '#aaa' }}>
+                {birthdate
+                  ? `${birthdate.getMonth() + 1}/${birthdate.getDate()}/${birthdate.getFullYear()}`
+                  : 'MM/DD/YYYY'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {/* Gender */}
+          <View style={styles.halfInput}>
+            <Text style={styles.label}>Gender</Text>
+            <TouchableOpacity
+              style={styles.inputRow}
+              onPress={() => setShowGenderPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Icon name="person-outline" size={20} color="#888" style={{ marginRight: 8 }} />
+              <Text style={{ flex: 1, fontSize: 15, color: '#222' }} numberOfLines={1}>
+                {gender}
+              </Text>
+              <Icon name="chevron-down" size={18} color="#888" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Date Picker Modal (Android shows as dialog) */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={birthdate || new Date(2000, 0, 1)}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            maximumDate={new Date()}
+            minimumDate={new Date(1920, 0, 1)}
+            onChange={(event: any, selectedDate?: Date) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (selectedDate) {
+                setBirthdate(selectedDate);
+              }
+            }}
+          />
+        )}
+
+        {/* Gender Picker Modal */}
+        <Modal
+          visible={showGenderPicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowGenderPicker(false)}
+        >
+          <Pressable
+            style={styles.genderModalOverlay}
+            onPress={() => setShowGenderPicker(false)}
+          >
+            <View style={styles.genderModalContent}>
+              <Text style={styles.genderModalTitle}>Select Gender</Text>
+              {genderOptions.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.genderOption,
+                    gender === option && styles.genderOptionActive,
+                  ]}
+                  onPress={() => {
+                    setGender(option);
+                    setShowGenderPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.genderOptionText,
+                      gender === option && styles.genderOptionTextActive,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                  {gender === option && (
+                    <Icon name="checkmark" size={20} color="#3578e5" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+
         {/* Password */}
         <Text style={styles.label}>Password</Text>
         <View style={styles.inputRow}>
@@ -224,6 +343,7 @@ export default function Register() {
           </TouchableOpacity>
         </View>
       </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
