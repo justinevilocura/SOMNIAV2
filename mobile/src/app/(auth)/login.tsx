@@ -46,6 +46,9 @@ export default function Login() {
     });
 
     useEffect(() => {
+        if (googleResponse) {
+            console.log('Google Auth Response:', googleResponse.type, googleResponse);
+        }
         if (googleResponse?.type === 'success') {
             const accessToken =
                 googleResponse.authentication?.accessToken ||

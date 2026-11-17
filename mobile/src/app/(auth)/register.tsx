@@ -62,6 +62,9 @@ export default function Register() {
   });
 
   useEffect(() => {
+    if (googleResponse) {
+      console.log('Google Auth Response (Register):', googleResponse.type, googleResponse);
+    }
     if (googleResponse?.type === 'success') {
       const accessToken =
         googleResponse.authentication?.accessToken ||
