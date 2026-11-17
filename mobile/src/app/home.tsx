@@ -82,12 +82,23 @@ export default function Home() {
         const isCustomized = await AsyncStorage.getItem('profileCustomized');
         const userJson = await userRes.json();
         if (userJson.success && userJson.userData) {
+          const authoritativeEmail = userJson.userData.email || '';
           setUserData(prev => ({
             ...prev,
             name: (isCustomized === 'true' && prev.name) ? prev.name : (userJson.userData.name || prev.name),
-            email: (isCustomized === 'true' && prev.email) ? prev.email : (userJson.userData.email || prev.email),
+            email: authoritativeEmail || prev.email,
             avatar: userJson.userData.avatar || prev.avatar,
           }));
+
+          if (authDataString) {
+            try {
+              const parsed = JSON.parse(authDataString);
+              if (authoritativeEmail) {
+                parsed.email = authoritativeEmail;
+                await AsyncStorage.setItem('authData', JSON.stringify(parsed));
+              }
+            } catch (_) {}
+          }
         }
       } catch (e) {
         console.log('Error refreshing user profile in home:', e);

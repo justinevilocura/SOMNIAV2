@@ -112,7 +112,7 @@ export default function Profile() {
           if (json.success && json.userData) {
             // If user customized their profile locally, DO NOT overwrite with stale server data!
             const finalName = (isCustomized === 'true' && cachedName) ? cachedName : (json.userData.name || 'User');
-            const finalEmail = (isCustomized === 'true' && cachedEmail) ? cachedEmail : (json.userData.email || '');
+            const finalEmail = json.userData.email || cachedEmail || '';
             const finalAge = (isCustomized === 'true' && cachedAge) ? cachedAge : (json.userData.age ? String(json.userData.age) : '');
             const finalGender = (isCustomized === 'true' && cachedGender) ? cachedGender : (json.userData.gender || '');
             const finalAvatar = json.userData.avatar || cachedAvatar || '';
@@ -413,6 +413,7 @@ export default function Profile() {
     try {
       await AsyncStorage.removeItem('authData');
       await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('profileCustomized');
       router.replace('/(auth)/login');
     } catch (error) {
       console.error('Error logging out:', error);

@@ -81,10 +81,11 @@ export default function Register() {
         { timeout: 15000 }
       );
       if (response.data.success) {
-        const { token, user_id, name: googleName, avatar, age, gender } = response.data;
+        const { token, user_id, name: googleName, email: googleEmail, avatar, age, gender } = response.data;
         await AsyncStorage.setItem('token', token);
 
         let realName = googleName || '';
+        let realEmail = googleEmail || '';
         let userAvatar = avatar || '';
         let userAge = age ? String(age) : '';
         let userGender = gender || '';
@@ -96,17 +97,22 @@ export default function Register() {
           const userJson = await userRes.json();
           if (userJson.success && userJson.userData) {
             realName = userJson.userData.name || realName;
+            realEmail = userJson.userData.email || realEmail;
             userAvatar = userJson.userData.avatar || userAvatar;
             userAge = userJson.userData.age ? String(userJson.userData.age) : userAge;
             userGender = userJson.userData.gender || userGender;
           }
         } catch (_) {}
 
+        // Reset stale profile customization from previous accounts
+        await AsyncStorage.removeItem('profileCustomized');
+
         await AsyncStorage.setItem('authData', JSON.stringify({
           token,
           timestamp: new Date().getTime(),
           isAuthenticated: true,
           user_id,
+          email: realEmail,
           name: realName || 'User',
           avatar: userAvatar,
           age: userAge,
