@@ -1,11 +1,17 @@
 import { View, Text, TouchableOpacity, Image, TextInput, Pressable } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import styles from '../../assets/styles/register.styles';
 import LinearGradient from 'react-native-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -16,6 +22,82 @@ export default function Register() {
 
   const router = useRouter();
   const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+
+  // ─── Google Sign-In ────────────────────────────────────────────────────
+  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '1087911574541-88bl14n8rvhvbhf95qrkfara50au83sn.apps.googleusercontent.com';
+  const androidClientScheme = `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`;
+
+  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    androidClientId,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    scopes: ['profile', 'email'],
+    redirectUri: makeRedirectUri({
+      native: `${androidClientScheme}:/oauth2redirect`,
+    }),
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const accessToken =
+        googleResponse.authentication?.accessToken ||
+        (googleResponse.params as any)?.access_token;
+      if (accessToken) {
+        handleGoogleBackendLogin(accessToken);
+      }
+    }
+  }, [googleResponse]);
+
+  const handleGoogleBackendLogin = async (accessToken: string) => {
+    setIsLoading(true);
+    try {
+      const response = await axios.post(
+        `${backendUrl}/api/auth/google`,
+        { accessToken },
+        { timeout: 15000 }
+      );
+      if (response.data.success) {
+        const { token, user_id, name: googleName, avatar, age, gender } = response.data;
+        await AsyncStorage.setItem('token', token);
+
+        let realName = googleName || '';
+        let userAvatar = avatar || '';
+        let userAge = age ? String(age) : '';
+        let userGender = gender || '';
+
+        try {
+          const userRes = await fetch(`${backendUrl}/api/user/data`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const userJson = await userRes.json();
+          if (userJson.success && userJson.userData) {
+            realName = userJson.userData.name || realName;
+            userAvatar = userJson.userData.avatar || userAvatar;
+            userAge = userJson.userData.age ? String(userJson.userData.age) : userAge;
+            userGender = userJson.userData.gender || userGender;
+          }
+        } catch (_) {}
+
+        await AsyncStorage.setItem('authData', JSON.stringify({
+          token,
+          timestamp: new Date().getTime(),
+          isAuthenticated: true,
+          user_id,
+          name: realName || 'User',
+          avatar: userAvatar,
+          age: userAge,
+          gender: userGender,
+        }));
+        Toast.show({ type: 'success', text1: 'Welcome!', text2: 'Signed in with Google.' });
+        router.replace('/home');
+      } else {
+        Toast.show({ type: 'error', text1: 'Google Sign Up Failed', text2: response.data.message });
+      }
+    } catch (error: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not sign in with Google.' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     console.log('Register button pressed!');
@@ -132,7 +214,11 @@ export default function Register() {
 
         {/* Social Buttons */}
         <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialBtnFull}>
+          <TouchableOpacity
+            style={styles.socialBtnFull}
+            onPress={() => promptGoogleAsync()}
+            disabled={!googleRequest || isLoading}
+          >
             <Image source={require('../../assets/images/google.png')} style={styles.socialIconFull} />
             <Text style={styles.socialBtnText}>Google</Text>
           </TouchableOpacity>
