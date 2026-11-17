@@ -11,7 +11,7 @@ export const register = async (req, res) => {
     }
 
     // Validate gender value
-    const allowedGenders = ["Male", "Female", "Prefer not to say"];
+    const allowedGenders = ["Male", "Female", "Prefer not to say", "Other"];
     if (!allowedGenders.includes(gender)) {
         return res.status(400).json({
         success: false,
@@ -68,7 +68,31 @@ export const register = async (req, res) => {
             console.log("Welcome email could not be sent (likely missing .env credentials), but registration will proceed:", emailError.message);
         }
 
-        return res.status(201).json({ success: true, message: "User registered successfully" });
+        // Auto-send verification OTP
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        user.verifyOtp = otp;
+        user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+        await user.save();
+
+        const verifyMailOptions = {
+            from: process.env.SENDER_EMAIL,
+            to: email,
+            subject: 'SOMNiA - Verify Your Email',
+            text: `Your verification code is: ${otp}\n\nPlease enter this code in the app to verify your email address.\n\nThis code expires in 24 hours.`,
+        };
+
+        try {
+            await transporter.sendMail(verifyMailOptions);
+        } catch (emailError) {
+            console.log("Verification OTP email could not be sent:", emailError.message);
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: "User registered successfully",
+            token,
+            user_id: user._id,
+        });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });

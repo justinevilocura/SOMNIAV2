@@ -146,8 +146,15 @@ export default function Register() {
       console.log('Registration response:', response.data);
 
       if (response.data.success) {
-        Toast.show({ type: 'success', text1: 'Account created successfully!' });
-        router.replace('/(auth)/login');
+        Toast.show({ type: 'success', text1: 'Account created! Please verify your email.' });
+        router.replace({
+          pathname: '/(auth)/verify-email',
+          params: {
+            token: response.data.token,
+            user_id: response.data.user_id,
+            email: email,
+          },
+        });
       } else {
         Toast.show({ type: 'error', text1: 'Registration failed. Please try again.' });
       }
