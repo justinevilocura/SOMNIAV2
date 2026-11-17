@@ -33,11 +33,16 @@ export default function Login() {
     const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
     // ─── Google Sign-In ────────────────────────────────────────────────────
+    const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '1087911574541-88bl14n8rvhvbhf95qrkfara50au83sn.apps.googleusercontent.com';
+    const androidClientScheme = `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`;
+
     const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+        androidClientId,
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
         scopes: ['profile', 'email'],
-        redirectUri: makeRedirectUri({ scheme: 'com.belleza.mobile', path: 'oauth2redirect' }),
+        redirectUri: makeRedirectUri({
+            native: `${androidClientScheme}:/oauth2redirect`,
+        }),
     });
 
     useEffect(() => {

@@ -34,8 +34,8 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "com.belleza.mobile",
-              "host": "oauth2redirect"
+              "scheme": "com.googleusercontent.apps.1087911574541-88bl14n8rvhvbhf95qrkfara50au83sn",
+              "path": "/oauth2redirect"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
