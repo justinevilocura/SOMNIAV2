@@ -129,9 +129,6 @@ export default function SleepReco() {
             <Text style={styles.cardSubtitle}>Personalized insights for better recovery</Text>
           </View>
         </View>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{recommendations.length} Tips</Text>
-        </View>
       </View>
 
       {/* Neat List of Recommendations */}
