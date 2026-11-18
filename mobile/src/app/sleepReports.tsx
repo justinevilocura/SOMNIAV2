@@ -33,11 +33,12 @@ export default function SleepReports() {
   });
   const [latestSleepDuration, setLatestSleepDuration] = useState('0h 0m');
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = this week, 1 = last week
 
   useEffect(() => {
     fetchSleepData();
     loadUserProfile();
-  }, []);
+  }, [weekOffset]);
 
   const loadUserProfile = async () => {
     try {
@@ -205,10 +206,11 @@ export default function SleepReports() {
       let weekLightMs = 0;
       let weekAwakeMs = 0;
 
-      // Loop backwards from 6 days ago to today (matching Web Dashboard)
+      // Loop backwards from 6 days ago to today (offset by weekOffset * 7 days)
+      const baseOffset = weekOffset * 7;
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
-        date.setDate(date.getDate() - i);
+        date.setDate(date.getDate() - i - baseOffset);
         dynamicLabels.push(daysArray[date.getDay()]);
 
         // Find sessions for this specific calendar day (based on wake-up time / endTime)
@@ -350,10 +352,21 @@ export default function SleepReports() {
       const formattedAvg = avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`;
       setAvgDuration(formattedAvg);
 
-      // Calculate Consistency similar to Web Dashboard Efficiency (Target: 8 hours)
-      let efficiency = avgVal > 0 ? (avgVal / 8) * 100 : 0;
-      efficiency = Math.min(100, Math.round(efficiency));
-      setConsistency(`${efficiency}%`);
+      // Calculate true Sleep Consistency based on day-to-day variance (Standard Deviation)
+      const validDays = weeklyData.filter(h => h > 0);
+      let calculatedConsistency = 100;
+      if (validDays.length >= 2) {
+        const meanDuration = validDays.reduce((a, b) => a + b, 0) / validDays.length;
+        const variance = validDays.reduce((acc, h) => acc + Math.pow(h - meanDuration, 2), 0) / validDays.length;
+        const stdDevHours = Math.sqrt(variance);
+        // Low variance = high consistency. Each hour of std deviation drops score by ~13.5%
+        calculatedConsistency = Math.max(20, Math.min(100, Math.round(100 - (stdDevHours * 13.5))));
+      } else if (validDays.length === 1) {
+        calculatedConsistency = 80;
+      } else {
+        calculatedConsistency = 0;
+      }
+      setConsistency(`${calculatedConsistency}%`);
 
       // Compute Latest Session Stage Composition & Duration (matching Live Dashboard Telemetry)
       let latestTotalFormatted = '0h 0m';
@@ -567,20 +580,123 @@ export default function SleepReports() {
       setRecoveryTrend(weeklyRecTrend);
       setBurnoutTrend(weeklyBurnTrend);
 
-      // Generate dynamic AI Insight using friendly clock format
-      if (avgVal >= 7 && avgVal <= 9) {
-        setAiInsight(`Your average sleep duration is ${formattedAvg}, which is within the optimal range of 7-9 hours. Keep up the great work!`);
-      } else if (avgVal > 0 && avgVal < 7) {
-        setAiInsight(`You are averaging ${formattedAvg} of sleep, which is below the recommended 7 hours. Try gradually adjusting your bedtime earlier to get more rest.`);
-      } else if (avgVal > 9) {
-        setAiInsight(`You are averaging ${formattedAvg} of sleep. While sleep is important, oversleeping consistently can sometimes leave you feeling groggy.`);
-      } else {
+      // ── Priority-Based AI Insight Rule Engine ──
+      // Derive metrics from real weekly data
+      const formatDayHours = (h: number): string => {
+        const hrs = Math.floor(h);
+        const mins = Math.round((h - hrs) * 60);
+        return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+      };
+
+      // Short sleep days (< 5 hours, only days with data)
+      const shortSleepDays: { day: string; duration: string; index: number }[] = [];
+      // Rebound sleep days (> 10 hours)
+      const reboundSleepDays: { day: string; duration: string; index: number }[] = [];
+
+      weeklyData.forEach((h, i) => {
+        if (h > 0 && h < 5) {
+          shortSleepDays.push({ day: dynamicLabels[i], duration: formatDayHours(h), index: i });
+        }
+        if (h > 10) {
+          reboundSleepDays.push({ day: dynamicLabels[i], duration: formatDayHours(h), index: i });
+        }
+      });
+
+      // Peak burnout value and its day
+      const validBurnout = weeklyBurnTrend.filter(v => v > 0);
+      const peakBurnout = validBurnout.length > 0 ? Math.max(...validBurnout) : 0;
+      const peakBurnoutIdx = weeklyBurnTrend.indexOf(peakBurnout);
+      const peakBurnoutDay = peakBurnoutIdx >= 0 ? dynamicLabels[peakBurnoutIdx] : '';
+
+      // Average recovery & burnout (only days with data)
+      const validRecovery = weeklyRecTrend.filter(v => v > 0);
+      const avgRecovery = validRecovery.length > 0
+        ? Math.round(validRecovery.reduce((a, b) => a + b, 0) / validRecovery.length)
+        : 0;
+      const avgBurnout = validBurnout.length > 0
+        ? Math.round(validBurnout.reduce((a, b) => a + b, 0) / validBurnout.length)
+        : 0;
+
+      const consistencyScore = calculatedConsistency; // true variation-based consistency
+
+      // ── Rule 1: Irregular Sleep & Rebound Sleep (Highest Priority) ──
+      if (shortSleepDays.length > 0 && reboundSleepDays.length > 0) {
+        // Pick the most extreme short and rebound day
+        const worstShort = shortSleepDays.reduce((a, b) =>
+          parseFloat(a.duration) < parseFloat(b.duration) ? a : b
+        );
+        const worstRebound = reboundSleepDays.reduce((a, b) =>
+          parseFloat(b.duration) > parseFloat(a.duration) ? b : a
+        );
+        const consistencyPrefix = consistencyScore >= 80
+          ? `Despite maintaining ${consistencyScore}% sleep consistency`
+          : `With a sleep consistency of ${consistencyScore}%`;
+
+        setAiInsight(
+          `${consistencyPrefix}, significant fluctuations between sleep deprivation (${worstShort.duration} on ${worstShort.day}) and extended recovery sleep (${worstRebound.duration} on ${worstRebound.day}) may be disrupting your recovery. Try maintaining a more consistent 7–8-hour sleep schedule to support better recovery and reduce burnout.`
+        );
+      }
+      // ── Rule 2: High Burnout & Insufficient Sleep ──
+      else if (avgVal > 0 && avgVal < 7 && peakBurnout > 60) {
+        setAiInsight(
+          `You're averaging only ${formattedAvg} of sleep, while your burnout level reached ${peakBurnout} on ${peakBurnoutDay}. This pattern may indicate accumulating fatigue. Consider moving your bedtime 30 minutes earlier to give your body more time to recover.`
+        );
+      }
+      // ── Rule 3: Optimal Sleep & Recovery Alignment ──
+      else if (avgVal >= 7 && consistencyScore >= 85 && avgRecovery > avgBurnout) {
+        setAiInsight(
+          `You're maintaining a healthy sleep average of ${formattedAvg} with ${consistencyScore}% consistency, and your recovery levels (avg ${avgRecovery}) are consistently outperforming burnout (avg ${avgBurnout}). Keep up your current sleep routine to maintain this positive balance.`
+        );
+      }
+      // ── Rule 4: Below recommended but no burnout spike ──
+      else if (avgVal > 0 && avgVal < 7) {
+        setAiInsight(
+          `You are averaging ${formattedAvg} of sleep, which is below the recommended 7 hours. Your average recovery score is ${avgRecovery} vs burnout at ${avgBurnout}. Try gradually adjusting your bedtime earlier to get more rest.`
+        );
+      }
+      // ── Rule 5: Oversleeping ──
+      else if (avgVal > 9) {
+        setAiInsight(
+          `You are averaging ${formattedAvg} of sleep. While rest is important, consistently sleeping over 9 hours may leave you feeling groggy. Your recovery averages ${avgRecovery} and burnout ${avgBurnout}. Try aiming for 7–9 hours for optimal performance.`
+        );
+      }
+      // ── Rule 6: Moderate but could improve ──
+      else if (avgVal >= 7) {
+        setAiInsight(
+          `Your average sleep duration is ${formattedAvg}, within the optimal 7–9 hour range. Your consistency is at ${consistencyScore}% with average recovery at ${avgRecovery} and burnout at ${avgBurnout}. ${consistencyScore < 85 ? 'Try to keep a more regular bedtime to boost consistency.' : 'Keep up the great work!'}`
+        );
+      }
+      // ── Rule 7: No data ──
+      else {
         setAiInsight("Not enough realistic sleep data to generate an insight for this week.");
       }
 
+      // Build per-bar colors: green = latest (most recent day with data), orange = poor (<5h)
+      // Find the index of the most recent day that has sleep data (latest bar)
+      let latestBarIdx = -1;
+      for (let idx = weeklyData.length - 1; idx >= 0; idx--) {
+        if (weeklyData[idx] > 0) {
+          latestBarIdx = idx;
+          break;
+        }
+      }
+
+      const barColors = weeklyData.map((h, idx) => {
+        if (h > 0 && h < 5) {
+          // Poor sleep — light orange
+          return (opacity = 1) => 'rgba(255, 159, 67, 0.65)';
+        }
+        if (idx === latestBarIdx) {
+          // Latest/recent sleep — light green
+          return (opacity = 1) => 'rgba(74, 222, 128, 0.65)';
+        }
+        // Default purple
+        return (opacity = 1) => `rgba(162, 89, 255, ${opacity})`;
+      });
+
       setChartData({
         labels: dynamicLabels,
-        datasets: [{ data: weeklyData }]
+        datasets: [{ data: weeklyData, colors: barColors } as any]
       });
     } catch (e) {
       console.error('Failed to fetch sleep history:', e);
@@ -649,6 +765,30 @@ export default function SleepReports() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
+        {/* Sleep Report Header */}
+        <View style={styles.reportHeaderRow}>
+          <View>
+            <Text style={styles.reportTitle}>Sleep Report</Text>
+            <Text style={styles.reportSubtitle}>Historical trends & patterns</Text>
+          </View>
+          <View style={styles.weekToggleRow}>
+            <TouchableOpacity
+              style={[styles.weekToggleBtn, weekOffset === 0 && styles.weekToggleBtnActive]}
+              onPress={() => setWeekOffset(0)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.weekToggleText, weekOffset === 0 && styles.weekToggleTextActive]}>This Week</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.weekToggleBtn, weekOffset === 1 && styles.weekToggleBtnActive]}
+              onPress={() => setWeekOffset(1)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.weekToggleText, weekOffset === 1 && styles.weekToggleTextActive]}>Last Week</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="bar-chart" size={24} color="#a259ff" />
@@ -668,9 +808,23 @@ export default function SleepReports() {
                 style={styles.chartStyle}
                 showValuesOnTopOfBars={true}
                 fromZero={true}
+                withCustomBarColorFromData={true}
+                flatColor={true}
               />
             </ScrollView>
           )}
+
+          {/* Bar Legend */}
+          <View style={styles.barLegendRow}>
+            <View style={styles.barLegendItem}>
+              <View style={[styles.barLegendBox, { backgroundColor: 'rgba(255, 159, 67, 0.65)', borderColor: '#e67e22' }]} />
+              <Text style={styles.barLegendText}>Poor Sleep</Text>
+            </View>
+            <View style={styles.barLegendItem}>
+              <View style={[styles.barLegendBox, { backgroundColor: 'rgba(74, 222, 128, 0.65)', borderColor: '#16a34a' }]} />
+              <Text style={styles.barLegendText}>Recent Sleep</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.statsRow}>
@@ -1527,5 +1681,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  reportHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 4,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  reportTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 0.3,
+  },
+  reportSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 3,
+  },
+  weekToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 10,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  weekToggleBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  weekToggleBtnActive: {
+    backgroundColor: '#8b5cf6',
+  },
+  weekToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  weekToggleTextActive: {
+    color: '#ffffff',
+  },
+  barLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  barLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  barLegendBox: {
+    width: 14,
+    height: 10,
+    borderRadius: 3,
+    borderWidth: 1.5,
+  },
+  barLegendText: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontWeight: '500',
   },
 });
