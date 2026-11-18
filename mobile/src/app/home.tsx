@@ -435,6 +435,11 @@ export default function Home() {
 
           // Cache latest wearable telemetry for sleep reports and analytics
           try {
+            const stageTotal = deepMs + remMs + lightMs + awakeMs;
+            const eff = stageTotal > 0
+              ? Math.min(100, Math.max(0, 100 - Math.round((awakeMs / stageTotal) * 100)))
+              : 96;
+
             AsyncStorage.setItem('latestWearableSleep', JSON.stringify({
               totalSleepHours: formattedSleep,
               totalMinutes,
@@ -446,6 +451,7 @@ export default function Home() {
               remMs,
               lightMs,
               awakeMs,
+              efficiency: eff,
             })).catch(() => {});
           } catch (storageErr) {
             // ignore

@@ -1,99 +1,166 @@
+import React, { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../assets/styles/sleepReco.styles';
 
 export default function SleepReco() {
-  // Mock data for sleep statistics
-  const sleepStats = {
-    averageSleep: '7.5',
-    sleepQuality: '85%',
-    sleepStreak: '5 days',
+  const [latestDurationHours, setLatestDurationHours] = useState<number>(7.5);
+  const [latestFormatted, setLatestFormatted] = useState<string>('7h 30m');
+  const [latestEfficiency, setLatestEfficiency] = useState<number>(85);
+
+  useEffect(() => {
+    loadLatestTelemetry();
+  }, []);
+
+  const loadLatestTelemetry = async () => {
+    try {
+      const cached = await AsyncStorage.getItem('latestWearableSleep');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed) {
+          if (parsed.hours !== undefined && parsed.minutes !== undefined) {
+            const h = Number(parsed.hours) + Number(parsed.minutes) / 60;
+            if (h > 0) setLatestDurationHours(h);
+          } else if (parsed.totalMinutes) {
+            setLatestDurationHours(parsed.totalMinutes / 60);
+          }
+          if (parsed.totalSleepFormatted) {
+            setLatestFormatted(parsed.totalSleepFormatted);
+          }
+          if (parsed.efficiency !== undefined && parsed.efficiency !== null) {
+            setLatestEfficiency(Number(parsed.efficiency));
+          } else if (parsed.deepMs || parsed.remMs || parsed.lightMs || parsed.awakeMs) {
+            const stageTotal = (parsed.deepMs || 0) + (parsed.remMs || 0) + (parsed.lightMs || 0) + (parsed.awakeMs || 0);
+            if (stageTotal > 0) {
+              const awakePct = Math.round(((parsed.awakeMs || 0) / stageTotal) * 100);
+              setLatestEfficiency(Math.min(100, Math.max(0, 100 - awakePct)));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error loading telemetry in SleepReco:', e);
+    }
   };
 
-  // Example sleep data for the past 7 days
-  const sleepData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    datasets: [
-      {
-        data: [7, 6.5, 8, 7.5, 8.3, 7, 8],
-        color: (opacity = 1) => `rgba(162, 89, 255, ${opacity})`,
-        strokeWidth: 3,
-      },
-    ],
-  };
-
-  // Function to get sleep recommendations
   const getSleepRecommendations = () => {
-    const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
-    const lastSleepHours = sleepData.datasets[0].data[sleepData.datasets[0].data.length - 1];
     const recommendations = [];
 
-    // Sleep duration recommendations
-    if (lastSleepHours < 6) {
+    // 1. Duration recommendation based on real latest session
+    if (latestDurationHours < 6) {
       recommendations.push({
-        title: 'Sleep Duration Alert',
-        message: 'Your sleep duration is below the recommended minimum. Try to aim for 7-9 hours of sleep.',
-        icon: 'warning-outline',
-        color: '#ff4d6d'
+        category: 'Duration Alert',
+        title: 'Short Sleep Recorded',
+        message: `Your last tracked rest was ${latestFormatted}, which is below the recommended 7–9 hours. Prioritize an earlier bedtime tonight to recover.`,
+        icon: 'warning-outline' as const,
+        color: '#f97316',
       });
-    } else if (lastSleepHours > 9) {
+    } else if (latestDurationHours > 10) {
       recommendations.push({
-        title: 'Oversleeping Notice',
-        message: 'You\'re sleeping more than the recommended amount. While rest is important, too much sleep can affect your energy levels.',
-        icon: 'information-circle-outline',
-        color: '#ffd60a'
-      });
-    } else {
-      recommendations.push({
-        title: 'Good Sleep Duration',
-        message: 'Your sleep duration is within the recommended range of 7-9 hours. Keep up the good work!',
-        icon: 'checkmark-circle-outline',
-        color: '#43e97b'
-      });
-    }
-
-    // Sleep quality recommendations
-    if (parseInt(sleepStats.sleepQuality) < 70) {
-      recommendations.push({
-        title: 'Sleep Quality Improvement',
-        message: 'Your sleep quality could be improved. Consider establishing a consistent sleep schedule and creating a relaxing bedtime routine.',
-        icon: 'moon-outline',
-        color: '#5d3fd3'
+        category: 'Recovery Sleep',
+        title: 'Extended Rebound Rest',
+        message: `Your last rest was ${latestFormatted}. Extended catch-up sleep clears accumulated sleep debt, but return to a steady 7–8h schedule to protect circadian rhythm.`,
+        icon: 'bed-outline' as const,
+        color: '#38bdf8',
       });
     } else {
       recommendations.push({
-        title: 'Excellent Sleep Quality',
-        message: 'Your sleep quality is excellent! Continue maintaining your healthy sleep habits.',
-        icon: 'star-outline',
-        color: '#ffd60a'
+        category: 'Duration Goal',
+        title: 'Optimal Sleep Duration',
+        message: `Your sleep duration (${latestFormatted}) is within the optimal 7–9 hour range. Maintaining this promotes balanced daytime energy and cognition.`,
+        icon: 'checkmark-circle-outline' as const,
+        color: '#22c55e',
       });
     }
 
-    // General sleep tips
+    // 2. Sleep quality & efficiency recommendation
+    if (latestEfficiency < 75) {
+      recommendations.push({
+        category: 'Quality & Depth',
+        title: 'Restlessness Detected',
+        message: `Sleep efficiency is at ${latestEfficiency}%. Avoid caffeine after 2 PM and reduce late evening screen exposure to increase deep sleep continuity.`,
+        icon: 'pulse-outline' as const,
+        color: '#a855f7',
+      });
+    } else {
+      recommendations.push({
+        category: 'Quality & Depth',
+        title: 'High Sleep Efficiency',
+        message: `Your sleep efficiency is at ${latestEfficiency}%. Your body is spending high-quality restorative time across deep and REM stages.`,
+        icon: 'star-outline' as const,
+        color: '#ffd166',
+      });
+    }
+
+    // 3. Sleep environment tip
     recommendations.push({
-      title: 'Sleep Environment Tip',
-      message: 'Keep your bedroom cool, dark, and quiet for optimal sleep conditions.',
-      icon: 'home-outline',
-      color: '#a259ff'
+      category: 'Environment',
+      title: 'Cool & Dark Sanctuary',
+      message: 'Keep bedroom temperature near 18–20°C (65–68°F) and minimize light. A cool environment triggers natural melatonin production.',
+      icon: 'moon-outline' as const,
+      color: '#818cf8',
     });
 
+    // 4. Bedtime routine tip
     recommendations.push({
-      title: 'Bedtime Routine',
-      message: 'Try to maintain a consistent bedtime routine to signal your body it\'s time to sleep.',
-      icon: 'time-outline',
-      color: '#ff8c42'
+      category: 'Circadian Routine',
+      title: 'Consistent Wind-Down',
+      message: 'Aim to sleep and wake within a 30-minute window daily. Regularity reinforces your biological clock and enhances morning alertness.',
+      icon: 'time-outline' as const,
+      color: '#ec4899',
     });
 
     return recommendations;
   };
 
+  const recommendations = getSleepRecommendations();
+
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Sleep Recommendations</Text>
-      {getSleepRecommendations().map((rec, index) => (
-        <View key={index} style={[styles.recommendationItem, { borderLeftColor: rec.color }]}>
-          <Ionicons name={rec.icon} size={24} color={rec.color} style={styles.recommendationIcon} />
+      {/* Sleek Header */}
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconBadge}>
+            <Ionicons name="sparkles" size={18} color="#a259ff" />
+          </View>
+          <View>
+            <Text style={styles.cardTitle}>Sleep Recommendations</Text>
+            <Text style={styles.cardSubtitle}>Personalized insights for better recovery</Text>
+          </View>
+        </View>
+        <View style={styles.countBadge}>
+          <Text style={styles.countBadgeText}>{recommendations.length} Tips</Text>
+        </View>
+      </View>
+
+      {/* Neat List of Recommendations */}
+      {recommendations.map((rec, index) => (
+        <View key={index} style={styles.recommendationItem}>
+          {/* Subtle colored accent strip on the left */}
+          <View style={[styles.accentBar, { backgroundColor: rec.color }]} />
+
+          {/* Rounded Tinted Icon Badge */}
+          <View
+            style={[
+              styles.iconContainer,
+              {
+                backgroundColor: `${rec.color}15`,
+                borderColor: `${rec.color}35`,
+                borderWidth: 1,
+              },
+            ]}
+          >
+            <Ionicons name={rec.icon} size={20} color={rec.color} />
+          </View>
+
+          {/* Text Content */}
           <View style={styles.recommendationContent}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.categoryTag, { color: rec.color }]}>
+                {rec.category}
+              </Text>
+            </View>
             <Text style={styles.recommendationTitle}>{rec.title}</Text>
             <Text style={styles.recommendationMessage}>{rec.message}</Text>
           </View>
