@@ -56,25 +56,187 @@ export default function SleepLog() {
   // Sleep Quality State
   const [sleepQuality, setSleepQuality] = useState<QualityOption>('Good');
 
-  // Biometrics Grid States
-  const [hrv, setHrv] = useState('68');
-  const [restingHr, setRestingHr] = useState('62');
-  const [remHours, setRemHours] = useState('1');
-  const [remMins, setRemMins] = useState('45');
-  const [deepHours, setDeepHours] = useState('2');
-  const [deepMins, setDeepMins] = useState('05');
-  const [stressLevel, setStressLevel] = useState<StressLevel>('High');
-
-  // Edit Modal for metric cards
-  const [editingMetric, setEditingMetric] = useState<string | null>(null);
-  const [tempMetricVal, setTempMetricVal] = useState('');
+  // Workload / Stress State
+  const [stressLevel, setStressLevel] = useState<StressLevel>('Moderate');
 
   // Notes State
   const [notes, setNotes] = useState('');
 
+  // Recent Manual Logs State
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
+  const [isLogsExpanded, setIsLogsExpanded] = useState(true);
+
   useEffect(() => {
     loadUserData();
+    loadRecentLogs();
   }, []);
+
+  const loadRecentLogs = async () => {
+    try {
+      const logsMap = new Map<string, any>();
+
+      // 1. Load from local sleepLogs
+      const storedSleepLogs = await AsyncStorage.getItem('sleepLogs');
+      if (storedSleepLogs) {
+        try {
+          const parsed = JSON.parse(storedSleepLogs);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((log: any) => {
+              if (log && log.date) {
+                const dateKey = new Date(log.date).toDateString();
+                if (!logsMap.has(dateKey)) {
+                  logsMap.set(dateKey, {
+                    ...log,
+                    durationFormatted:
+                      log.durationFormatted ||
+                      (log.totalDurationMinutes
+                        ? `${Math.floor(log.totalDurationMinutes / 60)}h ${log.totalDurationMinutes % 60}m`
+                        : '7h 00m'),
+                  });
+                }
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('Error parsing local sleepLogs:', err);
+        }
+      }
+
+      // 2. Also check sleepDiaryEntries for manual diary entries
+      const storedDiary = await AsyncStorage.getItem('sleepDiaryEntries');
+      if (storedDiary) {
+        try {
+          const parsedDiary = JSON.parse(storedDiary);
+          if (Array.isArray(parsedDiary)) {
+            parsedDiary.forEach((entry: any) => {
+              if (entry && entry.date) {
+                const dateKey = new Date(entry.date).toDateString();
+                if (!logsMap.has(dateKey)) {
+                  let durationMinutes = 450;
+                  if (entry.bedtime && entry.wakeTime) {
+                    const bTime = new Date(entry.bedtime).getTime();
+                    let wTime = new Date(entry.wakeTime).getTime();
+                    if (wTime <= bTime) wTime += 24 * 3600 * 1000;
+                    durationMinutes = Math.round((wTime - bTime) / 60000);
+                  }
+                  const h = Math.floor(durationMinutes / 60);
+                  const m = durationMinutes % 60;
+
+                  let tag = '';
+                  if (entry.lifestyleFactors?.exercise) tag = 'Workout';
+                  else if (entry.lifestyleFactors?.caffeine) tag = 'Caffeine';
+                  else if (entry.lifestyleFactors?.alcohol) tag = 'Alcohol';
+                  else if (entry.diaryNotes) tag = entry.diaryNotes.trim().split(/\s+/)[0];
+
+                  logsMap.set(dateKey, {
+                    id: entry.id || `diary-${Date.now()}-${Math.random()}`,
+                    date: entry.date,
+                    bedtime: entry.bedtime,
+                    wakeTime: entry.wakeTime,
+                    totalDurationMinutes: durationMinutes,
+                    durationFormatted: `${h}h ${m}m`,
+                    sleepQuality:
+                      entry.sleepQuality === 'Rested' || entry.sleepQuality === 'Refreshed'
+                        ? 'Good'
+                        : entry.sleepQuality === 'Tired' || entry.sleepQuality === 'Exhausted'
+                        ? 'Poor'
+                        : entry.sleepQuality || 'Okay',
+                    stressLevel: entry.lifestyleFactors?.stressLevel || 'Moderate',
+                    tag,
+                    notes: entry.diaryNotes || '',
+                  });
+                }
+              }
+            });
+          }
+        } catch (err) {
+          console.warn('Error parsing sleepDiaryEntries:', err);
+        }
+      }
+
+      // 3. Query backend history for any manual sleep sessions saved to cloud
+      try {
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+          const backendUrl =
+            process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
+          const res = await fetch(`${backendUrl}/api/sleepSession/history`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const historyJson = await res.json();
+          if (historyJson.success && historyJson.data?.sessions?.length) {
+            historyJson.data.sessions.forEach((s: any) => {
+              if (s.title && s.title.includes('Manual')) {
+                const sDate = s.endTime || s.startTime;
+                const dateKey = new Date(sDate).toDateString();
+                if (!logsMap.has(dateKey)) {
+                  const bTime = new Date(s.startTime).getTime();
+                  const wTime = new Date(s.endTime).getTime();
+                  const durMs = Math.max(0, wTime - bTime);
+                  const totalMinutes = Math.round(durMs / 60000);
+                  const h = Math.floor(totalMinutes / 60);
+                  const m = totalMinutes % 60;
+
+                  let quality: QualityOption = 'Good';
+                  if (s.title.includes('Bad')) quality = 'Bad';
+                  else if (s.title.includes('Poor')) quality = 'Poor';
+                  else if (s.title.includes('Okay')) quality = 'Okay';
+                  else if (s.title.includes('Excellent')) quality = 'Excellent';
+
+                  logsMap.set(dateKey, {
+                    id: s.id || `cloud-${s._id}`,
+                    date: sDate,
+                    bedtime: s.startTime,
+                    wakeTime: s.endTime,
+                    totalDurationMinutes: totalMinutes,
+                    durationFormatted: `${h}h ${m}m`,
+                    sleepQuality: quality,
+                    stressLevel:
+                      totalMinutes < 330 ? 'High' : totalMinutes < 420 ? 'Moderate' : 'Low',
+                    tag: 'Cloud Sync',
+                    notes: '',
+                  });
+                }
+              }
+            });
+          }
+        }
+      } catch (cloudErr) {
+        // Offline or backend unavailable, continue with local data
+      }
+
+      // Sort logs chronologically (newest first)
+      const sortedLogs = Array.from(logsMap.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      setRecentLogs(sortedLogs);
+    } catch (e) {
+      console.warn('Error loading recent logs:', e);
+      setRecentLogs([]);
+    }
+  };
+
+  const getQualityEmoji = (quality?: string) => {
+    switch (quality) {
+      case 'Bad':
+      case 'Exhausted':
+        return '😧';
+      case 'Poor':
+      case 'Tired':
+        return '😟';
+      case 'Okay':
+        return '😐';
+      case 'Good':
+      case 'Rested':
+        return '😊';
+      case 'Excellent':
+      case 'Refreshed':
+        return '😆';
+      default:
+        return '😊';
+    }
+  };
 
   // Whenever selectedDate changes, fetch accurate data for that specific date
   useEffect(() => {
@@ -136,21 +298,6 @@ export default function SleepLog() {
           setBedtime(new Date(matchedLocal.bedtime));
           setWakeTime(new Date(matchedLocal.wakeTime));
           setSleepQuality(matchedLocal.sleepQuality || 'Good');
-          setHrv(String(matchedLocal.hrv || 68));
-          setRestingHr(String(matchedLocal.restingHeartRate || 62));
-
-          const remMatch = (matchedLocal.remSleep || '1h 45m').match(/(\d+)h\s*(\d+)m/);
-          if (remMatch) {
-            setRemHours(remMatch[1]);
-            setRemMins(remMatch[2]);
-          }
-
-          const deepMatch = (matchedLocal.deepSleep || '2h 05m').match(/(\d+)h\s*(\d+)m/);
-          if (deepMatch) {
-            setDeepHours(deepMatch[1]);
-            setDeepMins(deepMatch[2]);
-          }
-
           setStressLevel(matchedLocal.stressLevel || 'High');
           setNotes(matchedLocal.notes || '');
           setHasDataForSelectedDate(true);
@@ -246,28 +393,6 @@ export default function SleepLog() {
 
             const totalHours = totalSleepMs / 3600000;
 
-            // Format REM duration
-            const remTotalMins = Math.round(remMs / 60000);
-            const rH = Math.floor(remTotalMins / 60);
-            const rM = remTotalMins % 60;
-            setRemHours(String(rH));
-            setRemMins(String(rM < 10 ? `0${rM}` : rM));
-
-            // Format Deep Sleep duration
-            const deepTotalMins = Math.round(deepMs / 60000);
-            const dH = Math.floor(deepTotalMins / 60);
-            const dM = deepTotalMins % 60;
-            setDeepHours(String(dH));
-            setDeepMins(String(dM < 10 ? `0${dM}` : dM));
-
-            // Clinical Resting Heart Rate estimation based on sleep efficiency
-            const calculatedRhr = Math.round(Math.max(52, Math.min(78, 62 + (8 - totalHours) * 2)));
-            setRestingHr(String(calculatedRhr));
-
-            // Clinical HRV (RMSSD in ms) based on deep restorative sleep
-            const calculatedHrv = Math.round(Math.max(38, Math.min(92, 75 - (calculatedRhr - 60) * 1.2 + (deepTotalMins / 12))));
-            setHrv(String(calculatedHrv));
-
             // Workload / Stress calculation
             let calculatedStress: StressLevel = 'Low';
             if (totalHours < 5.5) {
@@ -307,12 +432,6 @@ export default function SleepLog() {
       defaultEnd.setHours(6, 30, 0, 0);
       setBedtime(defaultStart);
       setWakeTime(defaultEnd);
-      setHrv('68');
-      setRestingHr('62');
-      setRemHours('1');
-      setRemMins('45');
-      setDeepHours('2');
-      setDeepMins('05');
       setStressLevel('Moderate');
       setSleepQuality('Good');
       setNotes('');
@@ -391,12 +510,10 @@ export default function SleepLog() {
         bedtime: bedtime.toISOString(),
         wakeTime: wakeTime.toISOString(),
         totalDurationMinutes: totalSleep.hours * 60 + totalSleep.mins,
+        durationFormatted: totalSleep.formatted,
         sleepQuality,
-        hrv: Number(hrv) || 68,
-        restingHeartRate: Number(restingHr) || 62,
-        remSleep: `${remHours}h ${remMins}m`,
-        deepSleep: `${deepHours}h ${deepMins}m`,
         stressLevel,
+        tag: notes.trim().split(/\s+/)[0] || '',
         notes,
         createdAt: new Date().toISOString(),
       };
@@ -410,6 +527,7 @@ export default function SleepLog() {
       );
       const updatedLogs = [logEntry, ...filtered];
       await AsyncStorage.setItem('sleepLogs', JSON.stringify(updatedLogs));
+      setRecentLogs(updatedLogs);
 
       // 2. Sync to backend if session endpoint is available
       try {
@@ -432,16 +550,16 @@ export default function SleepLog() {
                   {
                     startTime: bedtime.toISOString(),
                     endTime: new Date(
-                      bedtime.getTime() + (Number(deepHours) || 2) * 3600000
+                      bedtime.getTime() + Math.round((wakeTime.getTime() - bedtime.getTime()) * 0.22)
                     ).toISOString(),
-                    stage: 5, // Deep
+                    stage: 5, // Deep (~22%)
                   },
                   {
                     startTime: new Date(
-                      wakeTime.getTime() - (Number(remHours) || 1.75) * 3600000
+                      wakeTime.getTime() - Math.round((wakeTime.getTime() - bedtime.getTime()) * 0.18)
                     ).toISOString(),
                     endTime: wakeTime.toISOString(),
-                    stage: 6, // REM
+                    stage: 6, // REM (~18%)
                   },
                 ],
               },
@@ -470,11 +588,11 @@ export default function SleepLog() {
   };
 
   const qualities: { label: QualityOption; emoji: string }[] = [
-    { label: 'Bad', emoji: '☹️' },
-    { label: 'Poor', emoji: '🙁' },
+    { label: 'Bad', emoji: '😧' },
+    { label: 'Poor', emoji: '😟' },
     { label: 'Okay', emoji: '😐' },
     { label: 'Good', emoji: '😊' },
-    { label: 'Excellent', emoji: '😄' },
+    { label: 'Excellent', emoji: '😆' },
   ];
 
   return (
@@ -635,81 +753,13 @@ export default function SleepLog() {
           </View>
         </View>
 
-        {/* 3. Biometrics Grid (Row 1: HRV, Resting HR, REM) */}
-        <View style={logStyles.metricsRow3}>
-          {/* HRV Card */}
-          <TouchableOpacity
-            style={logStyles.metricCard3}
-            onPress={() => {
-              setEditingMetric('hrv');
-              setTempMetricVal(hrv);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={logStyles.metricCardLabel}>HRV (ms)</Text>
-            <Text style={logStyles.metricCardValue}>{hrv}</Text>
-          </TouchableOpacity>
-
-          {/* Resting HR Card */}
-          <TouchableOpacity
-            style={logStyles.metricCard3}
-            onPress={() => {
-              setEditingMetric('restingHr');
-              setTempMetricVal(restingHr);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={logStyles.metricCardLabel}>{'Resting HR\n(bpm)'}</Text>
-            <Text style={logStyles.metricCardValue}>{restingHr}</Text>
-          </TouchableOpacity>
-
-          {/* REM Sleep Card */}
-          <TouchableOpacity
-            style={logStyles.metricCard3}
-            onPress={() => {
-              setEditingMetric('rem');
-              setTempMetricVal(`${remHours}h ${remMins}m`);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={logStyles.metricCardLabel}>REM Sleep</Text>
-            <Text style={logStyles.metricCardValue}>{`${remHours}h ${remMins}m`}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 4. Biometrics Grid (Row 2: Deep Sleep, Workload / Stress) */}
-        <View style={logStyles.metricsRow2}>
-          {/* Deep Sleep Card */}
-          <TouchableOpacity
-            style={logStyles.metricCard2}
-            onPress={() => {
-              setEditingMetric('deep');
-              setTempMetricVal(`${deepHours}h ${deepMins}m`);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={logStyles.metricCardLabel}>Deep Sleep</Text>
-            <Text style={logStyles.metricCardValue}>{`${deepHours}h ${deepMins}m`}</Text>
-          </TouchableOpacity>
-
-          {/* Workload / Stress Card */}
-          <TouchableOpacity
-            style={logStyles.metricCard2}
-            onPress={() => {
-              const next: StressLevel =
-                stressLevel === 'Low'
-                  ? 'Moderate'
-                  : stressLevel === 'Moderate'
-                  ? 'High'
-                  : 'Low';
-              setStressLevel(next);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={logStyles.metricCardLabel}>Workload / Stress</Text>
+        {/* 3. Workload / Stress Card */}
+        <View style={logStyles.sectionCard}>
+          <View style={logStyles.stressHeaderRow}>
+            <Text style={logStyles.sectionLabel}>Workload / Stress</Text>
             <Text
               style={[
-                logStyles.metricCardValue,
+                logStyles.stressValueBadge,
                 {
                   color:
                     stressLevel === 'High'
@@ -722,7 +772,45 @@ export default function SleepLog() {
             >
               {stressLevel}
             </Text>
-          </TouchableOpacity>
+          </View>
+          <View style={logStyles.stressPillsContainer}>
+            {(['Low', 'Moderate', 'High'] as StressLevel[]).map((level) => {
+              const isSelected = stressLevel === level;
+              const activeColor =
+                level === 'High' ? '#f97316' : level === 'Moderate' ? '#f59e0b' : '#22c55e';
+              return (
+                <TouchableOpacity
+                  key={level}
+                  style={[
+                    logStyles.stressPill,
+                    isSelected && {
+                      backgroundColor:
+                        level === 'High'
+                          ? 'rgba(249, 115, 22, 0.15)'
+                          : level === 'Moderate'
+                          ? 'rgba(245, 158, 11, 0.15)'
+                          : 'rgba(34, 197, 94, 0.15)',
+                      borderColor: activeColor,
+                    },
+                  ]}
+                  onPress={() => setStressLevel(level)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      logStyles.stressPillText,
+                      isSelected && {
+                        color: activeColor,
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {level}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* 5. Notes (Optional) */}
@@ -746,6 +834,88 @@ export default function SleepLog() {
         >
           <Text style={logStyles.saveButtonText}>Save Log</Text>
         </TouchableOpacity>
+
+        {/* 7. Recent Manual Logs Section */}
+        <View style={logStyles.recentLogsCard}>
+          <TouchableOpacity
+            style={logStyles.recentLogsHeader}
+            onPress={() => setIsLogsExpanded(!isLogsExpanded)}
+            activeOpacity={0.7}
+          >
+            <Text style={logStyles.recentLogsTitle}>
+              Recent Manual Logs ({recentLogs.length})
+            </Text>
+            <Ionicons
+              name={isLogsExpanded ? 'caret-down' : 'caret-forward'}
+              size={14}
+              color="#818cf8"
+            />
+          </TouchableOpacity>
+
+          {isLogsExpanded && (
+            <View style={{ marginTop: 6 }}>
+              {recentLogs.length === 0 ? (
+                <Text style={logStyles.emptyLogsText}>
+                  No recent manual logs recorded. Enter your sleep above and tap "Save Log" to record an entry.
+                </Text>
+              ) : (
+                recentLogs.slice(0, 10).map((log, index) => {
+                  const logDate = log.date ? new Date(log.date) : new Date();
+                  const isLongSleep =
+                    (log.totalDurationMinutes && log.totalDurationMinutes >= 420) ||
+                    (log.durationFormatted &&
+                      (log.durationFormatted.includes('7h') ||
+                        log.durationFormatted.includes('8h') ||
+                        log.durationFormatted.includes('9h')));
+
+                  return (
+                    <TouchableOpacity
+                      key={log.id || `log-${index}`}
+                      style={logStyles.recentLogRow}
+                      onPress={() => {
+                        if (log.date) setSelectedDate(new Date(log.date));
+                        if (log.bedtime) setBedtime(new Date(log.bedtime));
+                        if (log.wakeTime) setWakeTime(new Date(log.wakeTime));
+                        if (log.sleepQuality) setSleepQuality(log.sleepQuality);
+                        if (log.stressLevel) setStressLevel(log.stressLevel);
+                        if (log.notes !== undefined) setNotes(log.notes);
+                        Toast.show({
+                          type: 'info',
+                          text1: 'Log Loaded',
+                          text2: `Editing sleep log for ${formatDateLabel(logDate)}.`,
+                        });
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={logStyles.logDateText}>{formatDateLabel(logDate)}</Text>
+                          <Text style={logStyles.logDot}>•</Text>
+                          <Text
+                            style={[
+                              logStyles.logDurationText,
+                              { color: isLongSleep ? '#38bdf8' : '#f59e0b' },
+                            ]}
+                          >
+                            {log.durationFormatted || '7h 00m'}
+                          </Text>
+                        </View>
+                        <Text style={logStyles.logSubDetails}>
+                          Quality: {log.sleepQuality || 'Good'} • Stress:{' '}
+                          {log.stressLevel || 'Moderate'}
+                          {log.tag ? ` • ${log.tag}` : ''}
+                        </Text>
+                      </View>
+                      <Text style={logStyles.logEmoji}>
+                        {getQualityEmoji(log.sleepQuality)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Date Picker Modal */}
@@ -768,86 +938,6 @@ export default function SleepLog() {
           onChange={handleTimeChange}
         />
       )}
-
-      {/* Edit Value Modal for Biometrics */}
-      <Modal
-        visible={editingMetric !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setEditingMetric(null)}
-      >
-        <TouchableOpacity
-          style={logStyles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setEditingMetric(null)}
-        >
-          <View style={logStyles.editModalContent}>
-            <Text style={logStyles.editModalTitle}>
-              Edit{' '}
-              {editingMetric === 'hrv'
-                ? 'HRV (ms)'
-                : editingMetric === 'restingHr'
-                ? 'Resting HR (bpm)'
-                : editingMetric === 'rem'
-                ? 'REM Sleep Duration'
-                : 'Deep Sleep Duration'}
-            </Text>
-
-            <TextInput
-              style={logStyles.editModalInput}
-              keyboardType={
-                editingMetric === 'hrv' || editingMetric === 'restingHr'
-                  ? 'number-pad'
-                  : 'default'
-              }
-              value={tempMetricVal}
-              onChangeText={setTempMetricVal}
-              placeholder={
-                editingMetric === 'hrv'
-                  ? 'e.g. 68'
-                  : editingMetric === 'restingHr'
-                  ? 'e.g. 62'
-                  : 'e.g. 1h 45m'
-              }
-              placeholderTextColor="#8a99ad"
-              autoFocus
-            />
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <TouchableOpacity
-                style={[logStyles.modalActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}
-                onPress={() => setEditingMetric(null)}
-              >
-                <Text style={{ color: '#ffffff', fontWeight: '600' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[logStyles.modalActionBtn, { backgroundColor: '#818cf8' }]}
-                onPress={() => {
-                  if (editingMetric === 'hrv') setHrv(tempMetricVal || '68');
-                  if (editingMetric === 'restingHr') setRestingHr(tempMetricVal || '62');
-                  if (editingMetric === 'rem') {
-                    const match = tempMetricVal.match(/(\d+)\s*h\s*(\d+)?/i);
-                    if (match) {
-                      setRemHours(match[1]);
-                      setRemMins(match[2] || '00');
-                    }
-                  }
-                  if (editingMetric === 'deep') {
-                    const match = tempMetricVal.match(/(\d+)\s*h\s*(\d+)?/i);
-                    if (match) {
-                      setDeepHours(match[1]);
-                      setDeepMins(match[2] || '00');
-                    }
-                  }
-                  setEditingMetric(null);
-                }}
-              >
-                <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Side Menu Drawer Modal - IDENTICAL to all tabs */}
       <Modal
@@ -1143,50 +1233,36 @@ const logStyles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.65)',
     fontWeight: '500',
   },
-  metricsRow3: {
+  stressHeaderRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-  },
-  metricCard3: {
-    flex: 1,
-    backgroundColor: '#161c2e',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    minHeight: 88,
+    marginBottom: 12,
   },
-  metricsRow2: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
-  metricCard2: {
-    flex: 1,
-    backgroundColor: '#161c2e',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    minHeight: 88,
-  },
-  metricCardLabel: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.55)',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  metricCardValue: {
-    fontSize: 18,
+  stressValueBadge: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#ffffff',
+  },
+  stressPillsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#0f1422',
+    borderRadius: 28,
+    padding: 4,
+    gap: 6,
+  },
+  stressPill: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  stressPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8a99ad',
   },
   notesInput: {
     backgroundColor: '#1e263d',
@@ -1217,41 +1293,65 @@ const logStyles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  editModalContent: {
-    width: '100%',
+  recentLogsCard: {
     backgroundColor: '#161c2e',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
+    marginTop: 18,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  editModalTitle: {
-    fontSize: 16,
+  recentLogsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  recentLogsTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 14,
   },
-  editModalInput: {
-    backgroundColor: '#1e263d',
-    borderRadius: 10,
-    padding: 12,
-    color: '#ffffff',
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  emptyLogsText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.5)',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 6,
   },
-  modalActionBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+  recentLogRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#101424',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  logDateText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  logDot: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginHorizontal: 6,
+  },
+  logDurationText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  logSubDetails: {
+    fontSize: 12,
+    color: '#8a99ad',
+    marginTop: 4,
+  },
+  logEmoji: {
+    fontSize: 24,
   },
 });
