@@ -432,6 +432,24 @@ export default function Home() {
             awakeMs,
             wakeUpCount,
           });
+
+          // Cache latest wearable telemetry for sleep reports and analytics
+          try {
+            AsyncStorage.setItem('latestWearableSleep', JSON.stringify({
+              totalSleepHours: formattedSleep,
+              totalMinutes,
+              hours,
+              minutes,
+              totalSleepFormatted: `${hours}h ${minutes}m`,
+              totalSleepMs,
+              deepMs,
+              remMs,
+              lightMs,
+              awakeMs,
+            })).catch(() => {});
+          } catch (storageErr) {
+            // ignore
+          }
         } else {
           lastSleepSession = null;
           setTotalSleepHours("0 hours and 0 minutes");
