@@ -569,10 +569,10 @@ export default function Home() {
     setRefreshing(true);
     try {
       setRefreshKey(prevKey => prevKey + 1);
-      Toast.show({ type: 'info', text1: 'Fetching data...', text2: 'Reading from Mi Fitness / Health Connect' });
-      await fetchHealthData(true);
+      // Run silently without toast popups so pull-down refresh stays clean while still syncing to cloud
+      await fetchHealthData(true, true);
     } catch (error: any) {
-      Toast.show({ type: 'error', text1: 'Refresh Failed', text2: error.message || 'Error refreshing data' });
+      console.warn('onRefresh error:', error);
     } finally {
       setRefreshing(false);
     }
