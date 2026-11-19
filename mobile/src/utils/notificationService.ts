@@ -210,7 +210,7 @@ export const syncBedtimeNotification = async (hourOverride?: number, minuteOverr
     const settings = settingsStr ? JSON.parse(settingsStr) : {};
 
     // If disabled, ensure it is cancelled
-    if (!settings.bedtimeReminder) {
+    if (settings.bedtimeReminder === false) {
       await cancelNotification('bedtime');
       return;
     }
@@ -247,6 +247,31 @@ export const syncBedtimeNotification = async (hourOverride?: number, minuteOverr
 };
 
 /**
+ * Schedule a daily 6:00 PM (18:00) Recovery Tip push notification.
+ * Adapts based on whether circadian realignment, strain, or relaxation is needed.
+ */
+export const syncRecoveryTipNotification = async (bodyOverride?: string, titleOverride?: string) => {
+  try {
+    const settingsStr = await AsyncStorage.getItem('notificationSettings');
+    const settings = settingsStr ? JSON.parse(settingsStr) : {};
+
+    if (settings.recoveryTips === false) {
+      await cancelNotification('recoveryTips');
+      return;
+    }
+
+    const title = titleOverride || '🌿 Recovery Tip';
+    const body =
+      bodyOverride ||
+      'Slow, paced breathing lowers resting heart rate. Try the 4-7-8 technique before bed to fall asleep faster.';
+
+    await scheduleDailyNotification('recoveryTips', 18, 0, title, body);
+  } catch (e) {
+    console.error('syncRecoveryTipNotification error:', e);
+  }
+};
+
+/**
  * Sync all notifications based on saved settings in AsyncStorage.
  */
 export const syncAllNotifications = async () => {
@@ -276,14 +301,8 @@ export const syncAllNotifications = async () => {
     }
 
     // 4. Recovery Tips (6:00 PM)
-    if (settings.recoveryTips) {
-      await scheduleDailyNotification(
-        'recoveryTips',
-        18,
-        0,
-        '🌿 Sleep Recovery Tip',
-        'Try 10-minute breathing exercise before bed to slow down your heart rate.'
-      );
+    if (settings.recoveryTips !== false) {
+      await syncRecoveryTipNotification();
     } else {
       await cancelNotification('recoveryTips');
     }

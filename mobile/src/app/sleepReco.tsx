@@ -4,14 +4,29 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../assets/styles/sleepReco.styles';
 
-export default function SleepReco() {
-  const [latestDurationHours, setLatestDurationHours] = useState<number>(7.5);
-  const [latestFormatted, setLatestFormatted] = useState<string>('7h 30m');
-  const [latestEfficiency, setLatestEfficiency] = useState<number>(85);
+interface SleepRecoProps {
+  efficiency?: number;
+  durationFormatted?: string;
+  durationHours?: number;
+}
+
+export default function SleepReco({ efficiency, durationFormatted, durationHours }: SleepRecoProps = {}) {
+  const [latestDurationHours, setLatestDurationHours] = useState<number>(durationHours || 7.5);
+  const [latestFormatted, setLatestFormatted] = useState<string>(durationFormatted || '7h 30m');
+  const [latestEfficiency, setLatestEfficiency] = useState<number>(efficiency !== undefined ? efficiency : 85);
 
   useEffect(() => {
+    if (efficiency !== undefined) {
+      setLatestEfficiency(efficiency);
+    }
+    if (durationFormatted) {
+      setLatestFormatted(durationFormatted);
+    }
+    if (durationHours !== undefined) {
+      setLatestDurationHours(durationHours);
+    }
     loadLatestTelemetry();
-  }, []);
+  }, [efficiency, durationFormatted, durationHours]);
 
   const loadLatestTelemetry = async () => {
     try {
@@ -19,22 +34,27 @@ export default function SleepReco() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed) {
-          if (parsed.hours !== undefined && parsed.minutes !== undefined) {
-            const h = Number(parsed.hours) + Number(parsed.minutes) / 60;
-            if (h > 0) setLatestDurationHours(h);
-          } else if (parsed.totalMinutes) {
-            setLatestDurationHours(parsed.totalMinutes / 60);
+          if (durationHours === undefined) {
+            if (parsed.hours !== undefined && parsed.minutes !== undefined) {
+              const h = Number(parsed.hours) + Number(parsed.minutes) / 60;
+              if (h > 0) setLatestDurationHours(h);
+            } else if (parsed.totalMinutes) {
+              setLatestDurationHours(parsed.totalMinutes / 60);
+            }
           }
-          if (parsed.totalSleepFormatted) {
+          if (!durationFormatted && parsed.totalSleepFormatted) {
             setLatestFormatted(parsed.totalSleepFormatted);
           }
-          if (parsed.efficiency !== undefined && parsed.efficiency !== null) {
-            setLatestEfficiency(Number(parsed.efficiency));
-          } else if (parsed.deepMs || parsed.remMs || parsed.lightMs || parsed.awakeMs) {
-            const stageTotal = (parsed.deepMs || 0) + (parsed.remMs || 0) + (parsed.lightMs || 0) + (parsed.awakeMs || 0);
-            if (stageTotal > 0) {
-              const awakePct = Math.round(((parsed.awakeMs || 0) / stageTotal) * 100);
-              setLatestEfficiency(Math.min(100, Math.max(0, 100 - awakePct)));
+          if (efficiency === undefined) {
+            if (parsed.efficiency !== undefined && parsed.efficiency !== null) {
+              setLatestEfficiency(Number(parsed.efficiency));
+            } else if (parsed.deepMs || parsed.remMs || parsed.lightMs || parsed.awakeMs) {
+              const stageTotal = (parsed.deepMs || 0) + (parsed.remMs || 0) + (parsed.lightMs || 0) + (parsed.awakeMs || 0);
+              if (stageTotal > 0) {
+                const rawAwakePct = Math.round(((parsed.awakeMs || 0) / stageTotal) * 100);
+                const awakePct = Math.max(3, rawAwakePct);
+                setLatestEfficiency(Math.min(97, Math.max(50, 100 - awakePct)));
+              }
             }
           }
         }

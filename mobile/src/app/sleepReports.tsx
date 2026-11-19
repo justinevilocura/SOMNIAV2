@@ -193,6 +193,41 @@ export default function SleepReports() {
         console.warn('Error reading sleepDiaryEntries in reports:', diaryErr);
       }
 
+      // 4. Merge latest wearable telemetry from Health Connect if not already in allSessions
+      try {
+        const storedWearable = await AsyncStorage.getItem('latestWearableSleep');
+        if (storedWearable) {
+          const parsedW = JSON.parse(storedWearable);
+          if (parsedW && (parsedW.date || parsedW.endTime)) {
+            const wDate = parsedW.date || parsedW.endTime;
+            const existing = allSessions.some(
+              (s: any) =>
+                new Date(s.endTime || s.startTime).toDateString() ===
+                new Date(wDate).toDateString()
+            );
+            if (!existing) {
+              const durH =
+                parsedW.hours !== undefined
+                  ? parsedW.hours + (parsedW.minutes || 0) / 60
+                  : (parsedW.totalMinutes || 0) / 60;
+              if (durH > 0) {
+                allSessions.push({
+                  startTime:
+                    parsedW.startTime ||
+                    new Date(new Date(wDate).getTime() - durH * 3600000).toISOString(),
+                  endTime: parsedW.endTime || wDate,
+                  durationHours: durH,
+                  title: 'Live Wearable Sleep',
+                  stages: [],
+                });
+              }
+            }
+          }
+        }
+      } catch (wearableErr) {
+        console.warn('Error reading latestWearableSleep in reports:', wearableErr);
+      }
+
       const daysArray = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const dynamicLabels = [];
       const weeklyData = [];
@@ -917,91 +952,7 @@ export default function SleepReports() {
           )}
         </View>
 
-        {/* 2. Sleep Stage Breakdown Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderWithBadge}>
-            <View style={styles.stageTitleRow}>
-              <Ionicons name="layers" size={20} color="#38bdf8" />
-              <Text style={styles.stageCardTitleHeader} numberOfLines={1}>
-                Sleep Stage Breakdown
-              </Text>
-            </View>
-            <View style={styles.latestDurationBadge}>
-              <Text style={styles.latestDurationBadgeText}>
-                {latestSleepDuration} total
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.stageSubtitle}>
-            Latest session stage composition
-          </Text>
-
-          {/* 2x2 Grid of Stage Metric Cards */}
-          <View style={styles.stagesGrid}>
-            {/* Deep Sleep */}
-            <View style={[styles.stageCard, { borderLeftColor: '#38bdf8' }]}>
-              <View style={styles.stageCardHeader}>
-                <View style={[styles.stageDot, { backgroundColor: '#38bdf8' }]} />
-                <Text style={styles.stageCardTitle}>Deep Sleep</Text>
-              </View>
-              <View style={styles.stageValuesRow}>
-                <Text style={styles.stageDurationText}>{stagesBreakdown.deep.duration}</Text>
-                <Text style={[styles.stagePercentBadge, { color: '#38bdf8' }]}>
-                  {stagesBreakdown.deep.percent}%
-                </Text>
-              </View>
-              <Text style={styles.stageDescText}>Tissue repair & physical recovery</Text>
-            </View>
-
-            {/* REM Sleep */}
-            <View style={[styles.stageCard, { borderLeftColor: '#a855f7' }]}>
-              <View style={styles.stageCardHeader}>
-                <View style={[styles.stageDot, { backgroundColor: '#a855f7' }]} />
-                <Text style={styles.stageCardTitle}>REM Sleep</Text>
-              </View>
-              <View style={styles.stageValuesRow}>
-                <Text style={styles.stageDurationText}>{stagesBreakdown.rem.duration}</Text>
-                <Text style={[styles.stagePercentBadge, { color: '#a855f7' }]}>
-                  {stagesBreakdown.rem.percent}%
-                </Text>
-              </View>
-              <Text style={styles.stageDescText}>Memory consolidation & dreams</Text>
-            </View>
-
-            {/* Light Sleep */}
-            <View style={[styles.stageCard, { borderLeftColor: '#818cf8' }]}>
-              <View style={styles.stageCardHeader}>
-                <View style={[styles.stageDot, { backgroundColor: '#818cf8' }]} />
-                <Text style={styles.stageCardTitle}>Light Sleep</Text>
-              </View>
-              <View style={styles.stageValuesRow}>
-                <Text style={styles.stageDurationText}>{stagesBreakdown.light.duration}</Text>
-                <Text style={[styles.stagePercentBadge, { color: '#818cf8' }]}>
-                  {stagesBreakdown.light.percent}%
-                </Text>
-              </View>
-              <Text style={styles.stageDescText}>Core sleep & mental reset</Text>
-            </View>
-
-            {/* Awake */}
-            <View style={[styles.stageCard, { borderLeftColor: '#f87171' }]}>
-              <View style={styles.stageCardHeader}>
-                <View style={[styles.stageDot, { backgroundColor: '#f87171' }]} />
-                <Text style={styles.stageCardTitle}>Awake</Text>
-              </View>
-              <View style={styles.stageValuesRow}>
-                <Text style={styles.stageDurationText}>{stagesBreakdown.awake.duration}</Text>
-                <Text style={[styles.stagePercentBadge, { color: '#f87171' }]}>
-                  {stagesBreakdown.awake.percent}%
-                </Text>
-              </View>
-              <Text style={styles.stageDescText}>Brief natural night wakeups</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 3. AI Insight Card */}
+        {/* 2. AI Insight Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="information-circle" size={24} color="#5d3fd3" />

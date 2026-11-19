@@ -17,7 +17,6 @@ import { useRouter } from 'expo-router';
 import LinearGradient from 'react-native-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle } from 'react-native-svg';
-import { LineChart } from 'react-native-chart-kit';
 import { useNotificationBadge } from '../hooks/useSleepRisk';
 import homeStyles from '../assets/styles/home.styles';
 
@@ -93,53 +92,28 @@ const CircularGauge = ({
   );
 };
 
-// Dynamic Donut Chart for Risk Breakdown
-const DonutBreakdown = ({
-  size = 110,
-  riskLevel = 'Low',
-  breakdown,
-}: {
-  size?: number;
-  riskLevel?: 'Low' | 'Moderate' | 'High';
-  breakdown: { pct: number; color: string }[];
-}) => {
-  const strokeWidth = 14;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
+interface DayOverviewStats {
+  hasData: boolean;
+  recoveryScore: number;
+  recoveryStatus: string;
+  sleepRiskLevel: 'Low' | 'Moderate' | 'High' | '--';
+  sleepRiskPct: number;
+  sleepDebt: string;
+  sleepQuality: string;
+  qualityEmoji: string;
+  recommendationText: string;
+}
 
-  let accumulatedPct = 0;
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size}>
-        {breakdown.map((seg, idx) => {
-          const dash = (seg.pct / 100) * circumference;
-          const offset = -(accumulatedPct / 100) * circumference;
-          accumulatedPct += seg.pct;
-
-          return (
-            <Circle
-              key={idx}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              stroke={seg.color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${dash} ${circumference - dash}`}
-              strokeDashoffset={offset}
-              fill="none"
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            />
-          );
-        })}
-      </Svg>
-      <View style={overviewStyles.donutCenter}>
-        <Text style={overviewStyles.donutCenterTitle}>{riskLevel}</Text>
-        <Text style={overviewStyles.donutCenterSub}>Risk</Text>
-      </View>
-    </View>
-  );
-};
+interface TargetWindowInfo {
+  windowStartStr: string;
+  windowEndStr: string;
+  windDownStr: string;
+  targetStr: string;
+  goalStr: string;
+  status: 'On Track' | 'Adapting' | 'Shifted / Realigning';
+  statusColor: string;
+  anchorTag: string;
+}
 
 export default function OverviewScreen() {
   const router = useRouter();
@@ -148,40 +122,51 @@ export default function OverviewScreen() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userData, setUserData] = useState({ name: 'User', email: '', avatar: '' });
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedWeekFilter, setSelectedWeekFilter] = useState<'This Week' | 'Last Week'>('This Week');
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<'Today' | 'Yesterday'>('Today');
 
-  // Dynamic Metrics State
-  const [recoveryScore, setRecoveryScore] = useState(82);
-  const [recoveryStatus, setRecoveryStatus] = useState('Good');
-  const [sleepRiskLevel, setSleepRiskLevel] = useState<'Low' | 'Moderate' | 'High'>('Low');
-  const [sleepRiskPct, setSleepRiskPct] = useState(18);
-  const [sleepDebt, setSleepDebt] = useState('0h 49m');
-  const [sevenDayAvg, setSevenDayAvg] = useState('7h 11m');
-  const [sleepQuality, setSleepQuality] = useState('Good');
-  const [qualityEmoji, setQualityEmoji] = useState('😊');
-  const [recommendationText, setRecommendationText] = useState(
-    'Great job! Your body is recovering well. Maintain your sleep schedule and try some relaxation before bed.'
-  );
+  // Sleep Target Window State
+  const [targetWindow, setTargetWindow] = useState<TargetWindowInfo>({
+    windowStartStr: '10:45 PM',
+    windowEndStr: '11:30 PM',
+    windDownStr: '10:00 PM',
+    targetStr: '10:45 PM',
+    goalStr: '8h',
+    status: 'On Track',
+    statusColor: '#10b981',
+    anchorTag: 'Consistent wake anchor',
+  });
 
-  // Chart Dynamic Data (Sat–Fri week)
-  const [chartLabels, setChartLabels] = useState(['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-  const [recoveryTrend, setRecoveryTrend] = useState<number[]>([0, 75, 68, 0, 82, 74, 85]);
-  const [burnoutTrend, setBurnoutTrend] = useState<number[]>([0, 21, 26, 0, 22, 30, 24]);
+  // Dynamic Day Metrics State
+  const [todayStats, setTodayStats] = useState<DayOverviewStats>({
+    hasData: false,
+    recoveryScore: 0,
+    recoveryStatus: 'No Data',
+    sleepRiskLevel: '--',
+    sleepRiskPct: 0,
+    sleepDebt: '--',
+    sleepQuality: 'No Record',
+    qualityEmoji: '🌙',
+    recommendationText:
+      'No sleep session recorded for last night. Wear your tracker tonight or log your sleep in the Sleep Log to view recovery insights.',
+  });
 
-  // Risk Breakdown Dynamic Percentages (4 Pillars, no "Others")
-  const [riskBreakdown, setRiskBreakdown] = useState([
-    { label: 'Sleep Duration', pct: 28, color: '#3b82f6' },
-    { label: 'Sleep Quality', pct: 25, color: '#22c55e' },
-    { label: 'Stress / Workload', pct: 27, color: '#f59e0b' },
-    { label: 'Lifestyle Factors', pct: 20, color: '#ef4444' },
-  ]);
+  const [yesterdayStats, setYesterdayStats] = useState<DayOverviewStats>({
+    hasData: false,
+    recoveryScore: 0,
+    recoveryStatus: 'No Data',
+    sleepRiskLevel: '--',
+    sleepRiskPct: 0,
+    sleepDebt: '--',
+    sleepQuality: 'No Record',
+    qualityEmoji: '🌙',
+    recommendationText:
+      'No sleep session recorded for yesterday. Keep your wearable synced or log past sleep to maintain consistent trend data.',
+  });
 
   useEffect(() => {
     loadUserData();
     fetchOverviewData();
-  }, [selectedWeekFilter]);
+  }, []);
 
   const loadUserData = async () => {
     try {
@@ -238,195 +223,429 @@ export default function OverviewScreen() {
       const backendUrl =
         process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
 
-      const response = await fetch(`${backendUrl}/api/sleepSession/history`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      let allSessions: any[] = [];
+      try {
+        const response = await fetch(`${backendUrl}/api/sleepSession/history`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await response.json();
+        if (json.success && json.data?.sessions?.length) {
+          allSessions = [...json.data.sessions];
+        }
+      } catch (err) {
+        console.warn('Backend sleep history error:', err);
+      }
 
-      const json = await response.json();
-      if (json.success && json.data?.sessions?.length) {
-        const sessions = json.data.sessions;
-        const now = new Date();
-
-        // Helper to extract session net duration in hours
-        const getSessionHours = (s: any) => {
-          if (s.durationHours !== undefined && s.durationHours !== null) return s.durationHours;
-          if (s.durationMinutes !== undefined && s.durationMinutes !== null) return s.durationMinutes / 60;
-          if (s.startTime && s.endTime) {
-            const diff = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000;
-            if (diff > 0) return diff;
+      // 3. Merge local manual sleep logs
+      try {
+        const storedLogs = await AsyncStorage.getItem('sleepLogs');
+        if (storedLogs) {
+          const parsed = JSON.parse(storedLogs);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((l: any) => {
+              if (l.date || l.bedtime) {
+                const sDate = l.date || l.bedtime;
+                const bTime = l.bedtime ? new Date(l.bedtime) : new Date(sDate);
+                const wTime = l.wakeTime
+                  ? new Date(l.wakeTime)
+                  : new Date(bTime.getTime() + (l.totalDurationMinutes || 450) * 60000);
+                allSessions.push({
+                  startTime: bTime.toISOString(),
+                  endTime: wTime.toISOString(),
+                  durationHours: (l.totalDurationMinutes || 450) / 60,
+                });
+              }
+            });
           }
-          return 0;
-        };
+        }
+      } catch (_) {}
 
-        // Calculate 7-Day Average (past 7 calendar days)
-        let totalRecentHours = 0;
-        let daysWithSleep = 0;
+      // 4. Merge sleep diary entries
+      try {
+        const storedDiary = await AsyncStorage.getItem('sleepDiaryEntries');
+        if (storedDiary) {
+          const parsedDiary = JSON.parse(storedDiary);
+          if (Array.isArray(parsedDiary)) {
+            parsedDiary.forEach((d: any) => {
+              if (d.bedtime && d.wakeTime) {
+                const bTime = new Date(d.bedtime);
+                let wTime = new Date(d.wakeTime);
+                if (wTime.getTime() <= bTime.getTime()) {
+                  wTime = new Date(wTime.getTime() + 24 * 3600000);
+                }
+                allSessions.push({
+                  startTime: bTime.toISOString(),
+                  endTime: wTime.toISOString(),
+                  durationHours: (wTime.getTime() - bTime.getTime()) / 3600000,
+                });
+              }
+            });
+          }
+        }
+      } catch (_) {}
 
-        for (let i = 0; i < 7; i++) {
-          const target = new Date(now);
-          target.setDate(now.getDate() - i);
+      // 5. Read cached wearable sleep
+      let cachedWearable: any = null;
+      try {
+        const cwStr = await AsyncStorage.getItem('latestWearableSleep');
+        if (cwStr) {
+          cachedWearable = JSON.parse(cwStr);
+          if (cachedWearable && (cachedWearable.date || cachedWearable.endTime)) {
+            const wDate = cachedWearable.date || cachedWearable.endTime;
+            const exists = allSessions.some(
+              (s: any) =>
+                new Date(s.endTime || s.startTime).toDateString() === new Date(wDate).toDateString()
+            );
+            if (!exists) {
+              const durH =
+                cachedWearable.hours !== undefined
+                  ? cachedWearable.hours + (cachedWearable.minutes || 0) / 60
+                  : (cachedWearable.totalMinutes || 0) / 60;
+              if (durH > 0) {
+                allSessions.push({
+                  startTime:
+                    cachedWearable.startTime ||
+                    new Date(new Date(wDate).getTime() - durH * 3600000).toISOString(),
+                  endTime: cachedWearable.endTime || wDate,
+                  durationHours: durH,
+                  title: 'Live Wearable Sleep',
+                });
+              }
+            }
+          }
+        }
+      } catch (_) {}
 
-          const daySessions = sessions.filter((s: any) => {
-            const d = new Date(s.endTime || s.startTime);
-            return d.toDateString() === target.toDateString();
-          });
+      // Helper to extract session net duration in hours
+      const getSessionHours = (s: any) => {
+        if (s.durationHours !== undefined && s.durationHours !== null) return s.durationHours;
+        if (s.durationMinutes !== undefined && s.durationMinutes !== null) return s.durationMinutes / 60;
+        if (s.startTime && s.endTime) {
+          const diff = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000;
+          if (diff > 0) return diff;
+        }
+        return 0;
+      };
 
-          let dayTotal = 0;
-          daySessions.forEach((s: any) => {
-            dayTotal += getSessionHours(s);
-          });
+      const now = new Date();
+      const CLINICAL_BENCHMARK_HOURS = targetSleepHours || 8.0;
 
-          if (dayTotal > 0 && dayTotal < 16) {
-            totalRecentHours += dayTotal;
-            daysWithSleep++;
+      // Function to calculate metrics for a specific target day offset (0 = Today/Last night, 1 = Yesterday)
+      const calculateDayMetrics = (dayOffset: number): DayOverviewStats => {
+        const targetDate = new Date(now);
+        targetDate.setDate(now.getDate() - dayOffset);
+        const targetDateStr = targetDate.toDateString();
+
+        const prevDate = new Date(targetDate);
+        prevDate.setDate(targetDate.getDate() - 1);
+        const prevDateStr = prevDate.toDateString();
+
+        // Strictly match sessions that concluded (woke up) on targetDateStr, or single session starting on targetDateStr without endTime
+        const matchingSessions = allSessions.filter((s: any) => {
+          const endStr = s.endTime ? new Date(s.endTime).toDateString() : '';
+          const startStr = s.startTime ? new Date(s.startTime).toDateString() : '';
+          return endStr === targetDateStr || (!endStr && startStr === targetDateStr);
+        });
+
+        let dayHours = 0;
+        matchingSessions.forEach((s: any) => {
+          dayHours += getSessionHours(s);
+        });
+
+        // Only use cached wearable sleep if its recorded date actually matches targetDateStr
+        let wearableMatchesTargetDay = false;
+        if (cachedWearable && (cachedWearable.endTime || cachedWearable.date)) {
+          const wEndDateStr = new Date(cachedWearable.endTime || cachedWearable.date).toDateString();
+          if (wEndDateStr === targetDateStr) {
+            wearableMatchesTargetDay = true;
           }
         }
 
-        const avgHours = daysWithSleep > 0 ? totalRecentHours / daysWithSleep : 7.18;
-        const avgH = Math.floor(avgHours);
-        const avgM = Math.round((avgHours - avgH) * 60);
-        const formattedAvg = avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`;
-        setSevenDayAvg(formattedAvg);
+        if (dayHours === 0 && wearableMatchesTargetDay && cachedWearable?.totalMinutes) {
+          dayHours = cachedWearable.totalMinutes / 60;
+        }
 
-        // Standard Clinical 8.0-Hour Benchmark for Sleep Debt:
-        // Always compares against the clinical 8.0-hour requirement for restorative adult sleep
-        const CLINICAL_BENCHMARK_HOURS = 8.0;
-        const dailyDebt = Math.max(0, CLINICAL_BENCHMARK_HOURS - avgHours);
+        // If no actual sleep record exists for this specific day:
+        if (dayHours <= 0) {
+          return {
+            hasData: false,
+            recoveryScore: 0,
+            recoveryStatus: 'No Data',
+            sleepRiskLevel: '--',
+            sleepRiskPct: 0,
+            sleepDebt: '--',
+            sleepQuality: 'No Record',
+            qualityEmoji: '🌙',
+            recommendationText:
+              dayOffset === 0
+                ? 'No sleep session recorded for last night. Wear your tracker tonight or log your sleep in the Sleep Log to view recovery insights.'
+                : 'No sleep session recorded for yesterday. Keep your wearable synced or log past sleep to maintain consistent trend data.',
+          };
+        }
+
+        // Check for circadian shift & schedule disruption for this day
+        let sessionWakeMins: number | null = null;
+        let sessionBedMins: number | null = null;
+        let wakeTimeDisplay = '';
+
+        if (matchingSessions.length > 0) {
+          const latestInDay = matchingSessions[matchingSessions.length - 1];
+          if (latestInDay.endTime) {
+            const eD = new Date(latestInDay.endTime);
+            sessionWakeMins = eD.getHours() * 60 + eD.getMinutes();
+            const h = eD.getHours();
+            const m = eD.getMinutes();
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const dh = h % 12 || 12;
+            wakeTimeDisplay = `${dh}:${m < 10 ? '0' : ''}${m} ${ampm}`;
+          }
+          if (latestInDay.startTime) {
+            const sD = new Date(latestInDay.startTime);
+            sessionBedMins = sD.getHours() * 60 + sD.getMinutes();
+          }
+        } else if (wearableMatchesTargetDay && cachedWearable?.endTime) {
+          const eD = new Date(cachedWearable.endTime);
+          sessionWakeMins = eD.getHours() * 60 + eD.getMinutes();
+          const h = eD.getHours();
+          const m = eD.getMinutes();
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const dh = h % 12 || 12;
+          wakeTimeDisplay = `${dh}:${m < 10 ? '0' : ''}${m} ${ampm}`;
+          if (cachedWearable.startTime) {
+            const sD = new Date(cachedWearable.startTime);
+            sessionBedMins = sD.getHours() * 60 + sD.getMinutes();
+          }
+        }
+
+        // Circadian Shift detection:
+        // Waking up in afternoon (after 12:30 PM = 750 mins) or sleeping past 2:30 AM
+        const isCircadianShifted =
+          (sessionWakeMins !== null && (sessionWakeMins >= 12 * 60 + 30 || sessionWakeMins < 5 * 60)) ||
+          (sessionBedMins !== null && sessionBedMins >= 2 * 60 + 30 && sessionBedMins < 12 * 60);
+
+        const dailyDebt = Math.max(0, CLINICAL_BENCHMARK_HOURS - dayHours);
         const debtH = Math.floor(dailyDebt);
         const debtM = Math.round((dailyDebt - debtH) * 60);
         const debtFormatted = dailyDebt > 0 ? `${debtH}h ${debtM}m` : '0h 0m';
-        setSleepDebt(debtFormatted);
 
-        // Accurate Clinical Recovery Score:
-        // Duration points (max 48) + Regularity & Debt points (max 42)
-        // Calibrated to realistic biometric range (e.g. 82-84 for ~7h 11m average sleep)
-        const durationPts = Math.min(48, (avgHours / CLINICAL_BENCHMARK_HOURS) * 48);
+        // Accurate Clinical Recovery Score based on real recorded hours & circadian rhythm
+        let durationPts = 48;
+        if (dayHours < CLINICAL_BENCHMARK_HOURS) {
+          durationPts = Math.min(48, (dayHours / CLINICAL_BENCHMARK_HOURS) * 48);
+        } else if (dayHours > 10.0) {
+          durationPts = 42; // Hypersomnia/rebound sleep penalty
+        }
+
         const debtPenalty = Math.min(16, dailyDebt * 10);
-        const regularityPts = Math.max(15, 42 - debtPenalty);
-        const computedScore = Math.min(94, Math.max(38, Math.round(durationPts + regularityPts)));
-        setRecoveryScore(computedScore);
+        let regularityPts = Math.max(15, 42 - debtPenalty);
 
-        // Sleep Risk Calculation: inversely proportional to recovery
-        const riskPct = Math.max(12, Math.min(85, Math.round(100 - computedScore)));
-        setSleepRiskPct(riskPct);
+        // Circadian misalignment penalty (e.g. waking up at 2:59 PM or sleeping past 3:30 AM)
+        if (isCircadianShifted) {
+          regularityPts = Math.max(12, regularityPts - 20);
+        }
+
+        let computedScore = Math.min(94, Math.max(38, Math.round(durationPts + regularityPts)));
+        if (isCircadianShifted && computedScore > 74) {
+          computedScore = 72; // Cap at Moderate for severe circadian disruption
+        }
+
+        // Sleep Risk Calculation
+        // Circadian disruption elevates sleep risk to Moderate (35-42%)
+        let riskPct = Math.max(12, Math.min(85, Math.round(100 - computedScore)));
+        if (isCircadianShifted && riskPct < 36) {
+          riskPct = 36;
+        }
 
         let riskLevel: 'Low' | 'Moderate' | 'High' = 'Low';
         let status = 'Good';
         let quality = 'Good';
         let emoji = '😊';
+        let reco = '';
 
-        if (computedScore >= 80) {
+        if (isCircadianShifted) {
+          riskLevel = 'Moderate';
+          status = 'Moderate';
+          quality = 'Fair';
+          emoji = '😐';
+          reco =
+            dayOffset === 0
+              ? `Extended rebound sleep detected with a significant circadian shift (woke up at ${wakeTimeDisplay || '2:59 PM'}). While your body caught up on physical rest, your circadian rhythm is out of sync. Avoid late naps today and gradually move your bedtime earlier in 30–45 minute increments to realign your rhythm.`
+              : `Yesterday's sleep was significantly delayed into the afternoon (${wakeTimeDisplay || 'afternoon'}). Gradual bedtime realignment is recommended to stabilize your circadian clock.`;
+        } else if (computedScore >= 80) {
           riskLevel = 'Low';
           status = 'Good';
           quality = 'Good';
           emoji = '😊';
-          setRecommendationText(
-            'Great job! Your body is recovering well. Maintain your sleep schedule and try some relaxation before bed.'
-          );
+          reco =
+            dayOffset === 0
+              ? 'Great job! Your body is recovering well on a consistent schedule. Maintain your sleep rhythm and try some relaxation before bed.'
+              : 'Yesterday provided solid restorative recovery. Consistent sleep patterns helped your body recharge effectively.';
         } else if (computedScore >= 65) {
           riskLevel = 'Moderate';
           status = 'Moderate';
           quality = 'Fair';
           emoji = '😐';
-          setRecommendationText(
-            `Moderate strain detected (${debtFormatted} deficit). Consider turning in 30 minutes earlier tonight to prevent cumulative sleep debt.`
-          );
+          reco =
+            dayOffset === 0
+              ? `Moderate strain detected (${debtFormatted} deficit). Consider turning in 30 minutes earlier tonight to prevent cumulative sleep debt.`
+              : `Yesterday carried a ${debtFormatted} deficit. Comparing with today shows how your recovery trajectory is shifting.`;
         } else {
           riskLevel = 'High';
           status = 'Needs Rest';
           quality = 'Poor';
           emoji = '🥱';
-          setRecommendationText(
-            `High sleep debt detected (${debtFormatted}). Prioritize 8+ hours of recovery rest tonight and practice 4-7-8 breathing before bed.`
+          reco =
+            dayOffset === 0
+              ? `High sleep debt detected (${debtFormatted}). Prioritize 8+ hours of recovery rest tonight and practice 4-7-8 breathing before bed.`
+              : `Yesterday had elevated sleep fatigue (${debtFormatted} debt). Prioritizing recovery helps mitigate carryover fatigue.`;
+        }
+
+        return {
+          hasData: true,
+          recoveryScore: computedScore,
+          recoveryStatus: status,
+          sleepRiskLevel: riskLevel,
+          sleepRiskPct: riskPct,
+          sleepDebt: debtFormatted,
+          sleepQuality: quality,
+          qualityEmoji: emoji,
+          recommendationText: reco,
+        };
+      };
+
+      const computedToday = calculateDayMetrics(0);
+      const computedYesterday = calculateDayMetrics(1);
+
+      setTodayStats(computedToday);
+      setYesterdayStats(computedYesterday);
+
+      // 6. Compute Sleep Target Window based on rolling 7-night baseline
+      const computeSleepTargetWindow = (sessions: any[], goalHours: number): TargetWindowInfo => {
+        const goalMinutes = Math.round((goalHours || 8.0) * 60);
+
+        // Find sessions from the past 7 calendar days
+        const past7DaysSessions = sessions.filter((s: any) => {
+          const sTime = new Date(s.endTime || s.startTime).getTime();
+          const diffDays = (now.getTime() - sTime) / (1000 * 3600 * 24);
+          return diffDays >= 0 && diffDays <= 7.5;
+        });
+
+        // Helper to format minutes from midnight into 12-hour AM/PM string
+        const formatMinutesToClock = (totalMins: number): string => {
+          let normalized = ((totalMins % 1440) + 1440) % 1440;
+          let hours = Math.floor(normalized / 60);
+          const mins = normalized % 60;
+          const ampm = hours >= 12 ? 'PM' : 'AM';
+          hours = hours % 12;
+          if (hours === 0) hours = 12;
+          const mStr = mins < 10 ? `0${mins}` : `${mins}`;
+          return `${hours}:${mStr} ${ampm}`;
+        };
+
+        // Extract valid wake times and bedtimes in minutes from midnight
+        const normalMorningWakeMins: number[] = [];
+        const bedtimeMinsList: number[] = [];
+
+        past7DaysSessions.forEach((s: any) => {
+          if (s.endTime) {
+            const eDate = new Date(s.endTime);
+            const wMins = eDate.getHours() * 60 + eDate.getMinutes();
+            // Normal morning wake window is between 5:00 AM (300 mins) and 10:30 AM (630 mins)
+            if (wMins >= 300 && wMins <= 630) {
+              normalMorningWakeMins.push(wMins);
+            }
+          }
+          if (s.startTime) {
+            const sDate = new Date(s.startTime);
+            bedtimeMinsList.push(sDate.getHours() * 60 + sDate.getMinutes());
+          }
+        });
+
+        // Typical healthy morning wake anchor (e.g. 7:00 AM)
+        let anchorWakeMins = 7 * 60; // 7:00 AM baseline
+        if (normalMorningWakeMins.length > 0) {
+          anchorWakeMins = Math.round(
+            normalMorningWakeMins.reduce((a, b) => a + b, 0) / normalMorningWakeMins.length
           );
         }
 
-        setRecoveryStatus(status);
-        setSleepRiskLevel(riskLevel);
-        setSleepQuality(quality);
-        setQualityEmoji(emoji);
+        // Ideal baseline bedtime calculated working backward from normal wake anchor
+        const baselineIdealBedtimeMins = (((anchorWakeMins - goalMinutes) % 1440) + 1440) % 1440;
 
-        // Dynamic 7-Day Recovery vs. Burnout Chart
-        // Week runs Saturday through Friday (matching Sleep Reports)
-        const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-        // Distance from today back to the most recent Saturday (start of current week)
-        const distanceToSaturday = (dayOfWeek + 1) % 7; // Sat=0, Sun=1, Mon=2, ...Fri=6
-        const weekOffset = selectedWeekFilter === 'Last Week' ? 7 : 0;
+        let targetBedtimeMins = baselineIdealBedtimeMins;
+        let status: 'On Track' | 'Adapting' | 'Shifted / Realigning' = 'On Track';
+        let statusColor = '#10b981';
+        let anchorTag = 'Consistent wake anchor';
 
-        const saturdayDate = new Date(now);
-        saturdayDate.setDate(now.getDate() - distanceToSaturday - weekOffset);
-        saturdayDate.setHours(0, 0, 0, 0);
+        if (past7DaysSessions.length > 0) {
+          const sorted = [...past7DaysSessions].sort(
+            (a, b) =>
+              new Date(b.endTime || b.startTime).getTime() -
+              new Date(a.endTime || a.startTime).getTime()
+          );
+          const latest = sorted[0];
 
-        const weekDayLabels = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-        const newRecTrend: number[] = [];
-        const newBurnTrend: number[] = [];
+          if (latest.startTime) {
+            const lDate = new Date(latest.startTime);
+            const latestBedMins = lDate.getHours() * 60 + lDate.getMinutes();
+            let bedDiff = Math.abs(latestBedMins - baselineIdealBedtimeMins);
+            if (bedDiff > 720) bedDiff = 1440 - bedDiff;
 
-        for (let d = 0; d < 7; d++) {
-          const targetDay = new Date(saturdayDate);
-          targetDay.setDate(saturdayDate.getDate() + d);
+            const latestWakeMins = latest.endTime
+              ? new Date(latest.endTime).getHours() * 60 + new Date(latest.endTime).getMinutes()
+              : anchorWakeMins;
+            const wakeShift = Math.abs(latestWakeMins - anchorWakeMins);
 
-          // Match sessions to this specific calendar day (by endTime/startTime)
-          const daySessions = sessions.filter((s: any) => {
-            const dt = new Date(s.endTime || s.startTime);
-            return dt.toDateString() === targetDay.toDateString();
-          });
+            // Check if there is a drastic disruption (e.g. bedtime at 3:24 AM / 3:33 AM, or afternoon wake up >= 12:00 PM)
+            const isDrasticDisruption = bedDiff > 120 || wakeShift > 180 || latestWakeMins >= 12 * 60;
+            const isModerateShift = bedDiff > 45 && !isDrasticDisruption;
 
-          let dayTotalH = 0;
-          daySessions.forEach((s: any) => {
-            dayTotalH += getSessionHours(s);
-          });
+            if (isDrasticDisruption) {
+              status = 'Shifted / Realigning';
+              statusColor = '#f59e0b';
+              anchorTag = 'Realigning rhythm';
 
-          if (dayTotalH > 0 && dayTotalH < 16) {
-            // Actual sleep data exists for this day — compute recovery & burnout from it
-            const dayRec = Math.min(92, Math.max(20, Math.round((dayTotalH / CLINICAL_BENCHMARK_HOURS) * 85)));
-            const dayBurn = Math.max(10, Math.min(78, Math.round(100 - dayRec * 0.82)));
-            newRecTrend.push(dayRec);
-            newBurnTrend.push(dayBurn);
-          } else {
-            // No sleep data for this day — both recovery and burnout are 0
-            newRecTrend.push(0);
-            newBurnTrend.push(0);
+              // Incremental recovery target: move bedtime 45 minutes EARLIER than the shifted bedtime towards baseline
+              const shiftedEarlier = (((latestBedMins - 45) % 1440) + 1440) % 1440;
+              // Round down to clean 30-minute block (e.g. 2:30 AM)
+              targetBedtimeMins = Math.floor(shiftedEarlier / 30) * 30;
+            } else if (isModerateShift) {
+              status = 'Adapting';
+              statusColor = '#38bdf8';
+              anchorTag = 'Adapting rhythm';
+
+              // Gradually shift 30 minutes earlier towards baseline
+              const shiftedEarlier = (((latestBedMins - 30) % 1440) + 1440) % 1440;
+              targetBedtimeMins = Math.floor(shiftedEarlier / 30) * 30;
+            } else {
+              status = 'On Track';
+              statusColor = '#10b981';
+              anchorTag = 'Consistent wake anchor';
+              targetBedtimeMins = (((baselineIdealBedtimeMins - 15) % 1440) + 1440) % 1440;
+            }
           }
         }
 
-        setChartLabels(weekDayLabels);
-        setRecoveryTrend(newRecTrend);
-        setBurnoutTrend(newBurnTrend);
+        const windowStart = targetBedtimeMins;
+        const windowEnd = (targetBedtimeMins + 45) % 1440;
+        const windDown = (((targetBedtimeMins - 45) % 1440) + 1440) % 1440;
+        const goalStr = `${Math.floor(goalHours)}h`;
 
-        // Load recent sleep diary entries to assess lifestyle risk
-        let diaryLifestyleRisk = 20;
-        try {
-          const diaryStr = await AsyncStorage.getItem('sleepDiaryEntries');
-          if (diaryStr) {
-            const entries = JSON.parse(diaryStr);
-            if (Array.isArray(entries) && entries.length > 0) {
-              const latest = entries[0];
-              let points = 15;
-              if (latest.lifestyleFactors?.caffeine) points += 5;
-              if (latest.lifestyleFactors?.alcohol) points += 5;
-              if (latest.lifestyleFactors?.screenTime === '3+ hours') points += 8;
-              if (latest.lifestyleFactors?.screenTime === '2-3 hours') points += 4;
-              if (latest.lifestyleFactors?.stressLevel === 'High' || latest.lifestyleFactors?.stressLevel === 'Very High') points += 6;
-              if (latest.lifestyleFactors?.exercise) points = Math.max(10, points - 5);
-              diaryLifestyleRisk = Math.min(30, Math.max(12, points));
-            }
-          }
-        } catch (_) {}
+        return {
+          windowStartStr: formatMinutesToClock(windowStart),
+          windowEndStr: formatMinutesToClock(windowEnd),
+          windDownStr: formatMinutesToClock(windDown),
+          targetStr: formatMinutesToClock(windowStart),
+          goalStr,
+          status,
+          statusColor,
+          anchorTag,
+        };
+      };
 
-        // Dynamic 4-Pillar Risk Breakdown (sums to 100%, "Others" removed)
-        const durationRisk = dailyDebt > 1.5 ? 35 : dailyDebt > 0.4 ? 28 : 22;
-        const qualityRisk = computedScore < 75 ? 30 : 25;
-        const lifestyleRisk = diaryLifestyleRisk;
-        const stressRisk = Math.max(15, 100 - (durationRisk + qualityRisk + lifestyleRisk));
-
-        setRiskBreakdown([
-          { label: 'Sleep Duration', pct: durationRisk, color: '#3b82f6' },
-          { label: 'Sleep Quality', pct: qualityRisk, color: '#22c55e' },
-          { label: 'Stress / Workload', pct: stressRisk, color: '#f59e0b' },
-          { label: 'Lifestyle Factors', pct: lifestyleRisk, color: '#ef4444' },
-        ]);
-      }
+      const computedWindow = computeSleepTargetWindow(allSessions, CLINICAL_BENCHMARK_HOURS);
+      setTargetWindow(computedWindow);
     } catch (e) {
       console.warn('Could not load overview stats:', e);
     }
@@ -437,16 +656,9 @@ export default function OverviewScreen() {
     await loadUserData();
     await fetchOverviewData();
     setRefreshing(false);
-  }, [selectedWeekFilter]);
+  }, []);
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
-
-  const firstName = userData.name ? userData.name.split(' ')[0] : 'Justine';
+  const activeStats = selectedDay === 'Today' ? todayStats : yesterdayStats;
 
   return (
     <LinearGradient colors={['#1a1a2e', '#23234b']} style={homeStyles.background}>
@@ -508,12 +720,52 @@ export default function OverviewScreen() {
           />
         }
       >
-        {/* Welcome Greeting */}
-        <View style={overviewStyles.greetingSection}>
-          <Text style={overviewStyles.greetingTitle}>
-            {getGreeting()}, {firstName}! 👋
-          </Text>
-          <Text style={overviewStyles.greetingSubtitle}>Here's your sleep overview</Text>
+        {/* Sleep Overview Header with Today / Yesterday Navigation */}
+        <View style={overviewStyles.overviewHeaderSection}>
+          <View style={overviewStyles.overviewHeaderLeft}>
+            <Text style={overviewStyles.overviewTitle}>Sleep Overview</Text>
+            <Text style={overviewStyles.overviewSubtitle}>
+              {selectedDay === 'Today' ? "Last night's sleep" : "Yesterday's sleep"}
+            </Text>
+          </View>
+
+          <View style={overviewStyles.daySelectorPill}>
+            <TouchableOpacity
+              onPress={() => setSelectedDay('Yesterday')}
+              disabled={selectedDay === 'Yesterday'}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+              style={overviewStyles.chevronButton}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={16}
+                color={selectedDay === 'Yesterday' ? 'rgba(255, 255, 255, 0.25)' : '#ffffff'}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setSelectedDay(prev => (prev === 'Today' ? 'Yesterday' : 'Today'))}
+              activeOpacity={0.7}
+              style={overviewStyles.dayTextWrapper}
+            >
+              <Text style={overviewStyles.daySelectorText}>{selectedDay}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setSelectedDay('Today')}
+              disabled={selectedDay === 'Today'}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+              style={overviewStyles.chevronButton}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={selectedDay === 'Today' ? 'rgba(255, 255, 255, 0.25)' : '#ffffff'}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 1. Recovery Score & Sleep Risk Cards */}
@@ -523,22 +775,35 @@ export default function OverviewScreen() {
             <Text style={overviewStyles.cardHeaderTitle}>Recovery Score</Text>
             <View style={overviewStyles.gaugeWrapper}>
               <CircularGauge
-                score={recoveryScore}
-                primaryColor={recoveryScore >= 80 ? '#22c55e' : recoveryScore >= 65 ? '#f59e0b' : '#ef4444'}
+                score={activeStats.hasData ? activeStats.recoveryScore : 0}
+                primaryColor={
+                  activeStats.hasData
+                    ? activeStats.recoveryScore >= 80
+                      ? '#22c55e'
+                      : activeStats.recoveryScore >= 65
+                      ? '#f59e0b'
+                      : '#ef4444'
+                    : 'rgba(255, 255, 255, 0.15)'
+                }
                 backgroundColor="rgba(255, 255, 255, 0.08)"
-                centerValue={recoveryScore}
+                centerValue={activeStats.hasData ? activeStats.recoveryScore : '--'}
               />
             </View>
             <Text
               style={[
                 overviewStyles.scoreStatusText,
                 {
-                  color:
-                    recoveryScore >= 80 ? '#22c55e' : recoveryScore >= 65 ? '#f59e0b' : '#ef4444',
+                  color: activeStats.hasData
+                    ? activeStats.recoveryScore >= 80
+                      ? '#22c55e'
+                      : activeStats.recoveryScore >= 65
+                      ? '#f59e0b'
+                      : '#ef4444'
+                    : '#8a99ad',
                 },
               ]}
             >
-              {recoveryStatus}
+              {activeStats.recoveryStatus}
             </Text>
           </View>
 
@@ -547,28 +812,49 @@ export default function OverviewScreen() {
             <Text style={overviewStyles.cardHeaderTitle}>Sleep Risk</Text>
             <View style={overviewStyles.gaugeWrapper}>
               <CircularGauge
-                score={sleepRiskPct}
-                primaryColor={sleepRiskLevel === 'Low' ? '#06d6a0' : sleepRiskLevel === 'Moderate' ? '#f59e0b' : '#ef4444'}
+                score={activeStats.hasData ? activeStats.sleepRiskPct : 0}
+                primaryColor={
+                  activeStats.hasData
+                    ? activeStats.sleepRiskLevel === 'Low'
+                      ? '#06d6a0'
+                      : activeStats.sleepRiskLevel === 'Moderate'
+                      ? '#f59e0b'
+                      : '#ef4444'
+                    : 'rgba(255, 255, 255, 0.15)'
+                }
                 backgroundColor="rgba(255, 255, 255, 0.08)"
-                centerValue={sleepRiskLevel}
-                centerSub={`${sleepRiskPct}%`}
+                centerValue={activeStats.sleepRiskLevel}
+                centerSub={activeStats.hasData ? `${activeStats.sleepRiskPct}%` : 'No Record'}
               />
             </View>
           </View>
         </View>
 
-        {/* 2. Quick Metrics 3-Column Bar */}
+        {/* 2. Recovery Recommendation Box */}
+        <View style={overviewStyles.recommendationCard}>
+          <View
+            style={[
+              overviewStyles.heartIconBox,
+              !activeStats.hasData && { backgroundColor: 'rgba(255, 255, 255, 0.06)' },
+            ]}
+          >
+            <Ionicons
+              name={activeStats.hasData ? 'heart' : 'moon-outline'}
+              size={24}
+              color={activeStats.hasData ? '#a259ff' : '#8a99ad'}
+            />
+          </View>
+          <View style={overviewStyles.recommendationTextBox}>
+            <Text style={overviewStyles.recommendationTitle}>Recovery Recommendation</Text>
+            <Text style={overviewStyles.recommendationDesc}>{activeStats.recommendationText}</Text>
+          </View>
+        </View>
+
+        {/* 3. Quick Metrics 2-Column Bar */}
         <View style={overviewStyles.metricsBar}>
           <View style={overviewStyles.metricItem}>
             <Text style={overviewStyles.metricLabel}>Sleep Debt</Text>
-            <Text style={overviewStyles.metricValueBlue}>{sleepDebt}</Text>
-          </View>
-
-          <View style={overviewStyles.metricDivider} />
-
-          <View style={overviewStyles.metricItem}>
-            <Text style={overviewStyles.metricLabel}>7-Day Avg.</Text>
-            <Text style={overviewStyles.metricValueBlue}>{sevenDayAvg}</Text>
+            <Text style={overviewStyles.metricValueBlue}>{activeStats.sleepDebt}</Text>
           </View>
 
           <View style={overviewStyles.metricDivider} />
@@ -576,243 +862,134 @@ export default function OverviewScreen() {
           <View style={overviewStyles.metricItem}>
             <Text style={overviewStyles.metricLabel}>Sleep Quality</Text>
             <View style={overviewStyles.qualityRow}>
-              <Text style={overviewStyles.metricValueWhite}>{sleepQuality}</Text>
-              <Text style={overviewStyles.qualityEmoji}>{qualityEmoji}</Text>
+              <Text style={overviewStyles.metricValueWhite}>{activeStats.sleepQuality}</Text>
+              <Text style={overviewStyles.qualityEmoji}>{activeStats.qualityEmoji}</Text>
             </View>
           </View>
         </View>
 
-        {/* 3. Recovery vs. Burnout Chart */}
-        <View style={overviewStyles.chartCard}>
-          <View style={overviewStyles.chartHeaderRow}>
-            <View style={overviewStyles.titleWithInfoRow}>
-              <Text style={overviewStyles.chartSectionTitle}>Recovery vs. Burnout</Text>
-              <TouchableOpacity
-                style={overviewStyles.infoIconButton}
-                onPress={() => setIsInfoModalOpen(true)}
-                activeOpacity={0.7}
+        {/* 4. Sleep Target Window Card */}
+        <View style={overviewStyles.targetWindowCard}>
+          {/* Top Row: Icon + Title & Range + Status Badge */}
+          <View style={overviewStyles.targetHeaderRow}>
+            <View style={overviewStyles.targetLeftGroup}>
+              <View
+                style={[
+                  overviewStyles.targetIconBox,
+                  !activeStats.hasData && { backgroundColor: 'rgba(255, 255, 255, 0.06)' },
+                ]}
               >
-                <Ionicons name="alert-circle-outline" size={17} color="#8a99ad" />
-              </TouchableOpacity>
+                <Ionicons
+                  name={activeStats.hasData ? 'moon' : 'moon-outline'}
+                  size={18}
+                  color={activeStats.hasData ? '#a78bfa' : '#8a99ad'}
+                />
+              </View>
+              <View style={overviewStyles.targetTitleCol}>
+                <Text style={overviewStyles.targetSectionLabel}>SLEEP TARGET WINDOW</Text>
+                <Text
+                  style={[
+                    overviewStyles.targetRangeText,
+                    !activeStats.hasData && { color: '#8a99ad', fontSize: 20 },
+                  ]}
+                >
+                  {activeStats.hasData
+                    ? `${targetWindow.windowStartStr} – ${targetWindow.windowEndStr}`
+                    : '--'}
+                </Text>
+              </View>
             </View>
-            <TouchableOpacity
-              style={overviewStyles.filterPill}
-              activeOpacity={0.7}
-              onPress={() => setIsFilterModalOpen(true)}
+
+            <View
+              style={[
+                overviewStyles.targetStatusBadge,
+                activeStats.hasData
+                  ? {
+                      backgroundColor: `${targetWindow.statusColor}18`,
+                      borderColor: `${targetWindow.statusColor}55`,
+                    }
+                  : {
+                      backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                      borderColor: 'rgba(255, 255, 255, 0.15)',
+                    },
+              ]}
             >
-              <Text style={overviewStyles.filterText}>{selectedWeekFilter}</Text>
-              <Ionicons name="chevron-down" size={14} color="#8a99ad" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Chart Legend */}
-          <View style={overviewStyles.legendRow}>
-            <View style={overviewStyles.legendItem}>
-              <View style={[overviewStyles.legendDot, { backgroundColor: '#22c55e' }]} />
-              <Text style={overviewStyles.legendLabel}>Recovery</Text>
-            </View>
-            <View style={overviewStyles.legendItem}>
-              <View style={[overviewStyles.legendDot, { backgroundColor: '#f59e0b' }]} />
-              <Text style={overviewStyles.legendLabel}>Burnout</Text>
+              <Text
+                style={[
+                  overviewStyles.targetStatusText,
+                  { color: activeStats.hasData ? targetWindow.statusColor : '#8a99ad' },
+                ]}
+              >
+                {activeStats.hasData ? targetWindow.status : 'No Data'}
+              </Text>
             </View>
           </View>
 
-          {/* Line Chart */}
-          <LineChart
-            data={{
-              labels: chartLabels,
-              datasets: [
-                {
-                  data: recoveryTrend,
-                  color: () => '#22c55e',
-                  strokeWidth: 2.5,
-                },
-                {
-                  data: burnoutTrend,
-                  color: () => '#f59e0b',
-                  strokeWidth: 2.5,
-                },
-              ],
-            }}
-            width={screenWidth - 64}
-            height={160}
-            chartConfig={{
-              backgroundColor: '#161c2e',
-              backgroundGradientFrom: '#161c2e',
-              backgroundGradientTo: '#161c2e',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(255, 255, 255, ${opacity * 0.4})`,
-              labelColor: () => '#8a99ad',
-              propsForDots: {
-                r: '3',
-                strokeWidth: '1',
-              },
-              propsForBackgroundLines: {
-                stroke: 'rgba(255, 255, 255, 0.05)',
-              },
-            }}
-            bezier
-            style={overviewStyles.lineChartStyle}
-          />
-        </View>
-
-        {/* 4. Risk Breakdown Section */}
-        <View style={overviewStyles.breakdownCard}>
-          <Text style={overviewStyles.cardHeaderTitle}>Risk Breakdown</Text>
-
-          <View style={overviewStyles.breakdownContentRow}>
-            <View style={overviewStyles.donutWrapper}>
-              <DonutBreakdown
-                size={110}
-                riskLevel={sleepRiskLevel}
-                breakdown={riskBreakdown}
-              />
+          {/* Middle Box: Wind-down, Target, Goal & Progress Track */}
+          <View style={overviewStyles.targetMidBox}>
+            <View style={overviewStyles.targetMetricsRow}>
+              <Text style={overviewStyles.targetMetricLabel}>
+                Wind-down:{' '}
+                <Text style={overviewStyles.targetMetricValue}>
+                  {activeStats.hasData ? targetWindow.windDownStr : '--'}
+                </Text>
+              </Text>
+              <Text style={overviewStyles.targetMetricLabel}>
+                Target:{' '}
+                <Text style={overviewStyles.targetMetricValue}>
+                  {activeStats.hasData ? targetWindow.targetStr : '--'}
+                </Text>
+              </Text>
+              <Text style={overviewStyles.targetMetricLabel}>
+                Goal:{' '}
+                <Text
+                  style={[
+                    overviewStyles.targetMetricValue,
+                    { color: activeStats.hasData ? '#38bdf8' : '#8a99ad' },
+                  ]}
+                >
+                  {activeStats.hasData ? targetWindow.goalStr : '--'}
+                </Text>
+              </Text>
             </View>
 
-            <View style={overviewStyles.breakdownList}>
-              {riskBreakdown.map((item, idx) => (
-                <View key={idx} style={overviewStyles.breakdownItem}>
-                  <View style={[overviewStyles.bulletDot, { backgroundColor: item.color }]} />
-                  <Text style={overviewStyles.breakdownItemText}>{item.label}</Text>
-                  <Text style={overviewStyles.breakdownItemPct}>{item.pct}%</Text>
-                </View>
-              ))}
+            {/* Segmented Timeline Bar */}
+            <View style={overviewStyles.targetTrackContainer}>
+              {activeStats.hasData ? (
+                <>
+                  <View style={[overviewStyles.trackSegment, { flex: 3, backgroundColor: '#334155' }]} />
+                  <View style={[overviewStyles.trackSegment, { flex: 2, backgroundColor: '#f59e0b' }]} />
+                  <View style={[overviewStyles.trackSegment, { flex: 5, backgroundColor: '#38bdf8' }]} />
+                </>
+              ) : (
+                <View
+                  style={[
+                    overviewStyles.trackSegment,
+                    { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.08)' },
+                  ]}
+                />
+              )}
             </View>
           </View>
-        </View>
 
-        {/* 5. Recovery Recommendation Box */}
-        <View style={overviewStyles.recommendationCard}>
-          <View style={overviewStyles.heartIconBox}>
-            <Ionicons name="heart" size={24} color="#a259ff" />
-          </View>
-          <View style={overviewStyles.recommendationTextBox}>
-            <Text style={overviewStyles.recommendationTitle}>Recovery Recommendation</Text>
-            <Text style={overviewStyles.recommendationDesc}>{recommendationText}</Text>
+          {/* Bottom Row: Rhythm context & Anchor note */}
+          <View style={overviewStyles.targetBottomRow}>
+            <Text style={overviewStyles.targetRhythmNote}>
+              {activeStats.hasData ? 'Based on 7-night rhythm' : 'No recorded sleep rhythm'}
+            </Text>
+            <Text
+              style={[
+                overviewStyles.targetAnchorTag,
+                !activeStats.hasData && { color: '#8a99ad' },
+              ]}
+            >
+              {activeStats.hasData ? targetWindow.anchorTag : 'No record'}
+            </Text>
           </View>
         </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Week Filter Picker Modal */}
-      <Modal
-        visible={isFilterModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsFilterModalOpen(false)}
-      >
-        <TouchableOpacity
-          style={overviewStyles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setIsFilterModalOpen(false)}
-        >
-          <View style={overviewStyles.filterModalContainer}>
-            <Text style={overviewStyles.filterModalTitle}>Select Timeframe</Text>
-            {(['This Week', 'Last Week'] as const).map((filter) => (
-              <TouchableOpacity
-                key={filter}
-                style={[
-                  overviewStyles.filterOptionItem,
-                  selectedWeekFilter === filter && overviewStyles.filterOptionActive,
-                ]}
-                onPress={() => {
-                  setSelectedWeekFilter(filter);
-                  setIsFilterModalOpen(false);
-                }}
-              >
-                <Text
-                  style={[
-                    overviewStyles.filterOptionText,
-                    selectedWeekFilter === filter && { color: '#06d6a0', fontWeight: 'bold' },
-                  ]}
-                >
-                  {filter}
-                </Text>
-                {selectedWeekFilter === filter && (
-                  <Ionicons name="checkmark" size={18} color="#06d6a0" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Recovery vs. Burnout Info Guide Modal */}
-      <Modal
-        visible={isInfoModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsInfoModalOpen(false)}
-      >
-        <TouchableOpacity
-          style={overviewStyles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setIsInfoModalOpen(false)}
-        >
-          <View style={overviewStyles.infoModalContainer}>
-            <View style={overviewStyles.infoModalHeader}>
-              <View style={overviewStyles.infoModalTitleRow}>
-                <Ionicons name="information-circle" size={22} color="#06d6a0" />
-                <Text style={overviewStyles.infoModalTitle}>Recovery vs. Burnout</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsInfoModalOpen(false)}
-                style={overviewStyles.infoModalCloseButton}
-              >
-                <Ionicons name="close" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
-              {/* Recovery Item */}
-              <View style={overviewStyles.infoSectionBox}>
-                <View style={overviewStyles.infoSectionHeader}>
-                  <View style={[overviewStyles.legendDot, { backgroundColor: '#22c55e' }]} />
-                  <Text style={[overviewStyles.infoSectionHeading, { color: '#22c55e' }]}>
-                    Recovery (Green Line)
-                  </Text>
-                </View>
-                <Text style={overviewStyles.infoSectionText}>
-                  Measures your body's restorative energy replenishment each night. Higher is better (Target: 75–95). Reaching your sleep goal keeps recovery high.
-                </Text>
-              </View>
-
-              {/* Burnout Item */}
-              <View style={overviewStyles.infoSectionBox}>
-                <View style={overviewStyles.infoSectionHeader}>
-                  <View style={[overviewStyles.legendDot, { backgroundColor: '#f59e0b' }]} />
-                  <Text style={[overviewStyles.infoSectionHeading, { color: '#f59e0b' }]}>
-                    Burnout (Orange Line)
-                  </Text>
-                </View>
-                <Text style={overviewStyles.infoSectionText}>
-                  Measures cumulative fatigue and physiological strain caused by sleep deficits. Lower is better (Target: 15–30). Higher sleep debt pushes burnout upward.
-                </Text>
-              </View>
-
-              {/* How to Read */}
-              <View style={overviewStyles.infoTipBox}>
-                <Ionicons name="bulb-outline" size={18} color="#ffd166" style={{ marginTop: 2 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={overviewStyles.infoTipTitle}>How to read this chart:</Text>
-                  <Text style={overviewStyles.infoTipText}>
-                    Keep the green recovery line safely above the orange burnout line. If the lines close the gap or cross, your body is under sleep debt stress and needs an earlier bedtime tonight.
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={overviewStyles.infoGotItButton}
-              onPress={() => setIsInfoModalOpen(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={overviewStyles.infoGotItText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Hamburger Drawer Modal - EXACT MATCH to Home Dashboard */}
       <Modal
@@ -966,18 +1143,54 @@ const overviewStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  greetingSection: {
+  overviewHeaderSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+    marginTop: 4,
   },
-  greetingTitle: {
+  overviewHeaderLeft: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  overviewTitle: {
     fontSize: 22,
     fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: -0.3,
     marginBottom: 4,
   },
-  greetingSubtitle: {
+  overviewSubtitle: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#38bdf8',
+    fontWeight: '500',
+  },
+  daySelectorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  chevronButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayTextWrapper: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  daySelectorText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: 0.2,
   },
 
   // 1. Score & Risk Cards
@@ -1075,140 +1288,13 @@ const overviewStyles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // 3. Chart Card
-  chartCard: {
-    backgroundColor: '#13182c',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  chartHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  titleWithInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  infoIconButton: {
-    padding: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chartSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  filterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  filterText: {
-    fontSize: 11,
-    color: '#8a99ad',
-    fontWeight: '500',
-  },
-  legendRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendLabel: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.65)',
-  },
-  lineChartStyle: {
-    marginVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'center',
-  },
-
-  // 4. Risk Breakdown
-  breakdownCard: {
-    backgroundColor: '#13182c',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  breakdownContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginTop: 4,
-  },
-  donutWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  donutCenter: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  donutCenterTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  donutCenterSub: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.6)',
-  },
-  breakdownList: {
-    flex: 1,
-    gap: 8,
-  },
-  breakdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bulletDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  breakdownItemText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.75)',
-    flex: 1,
-  },
-  breakdownItemPct: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-
-  // 5. Recovery Recommendation Box
+  // Recovery Recommendation Box
   recommendationCard: {
     flexDirection: 'row',
     backgroundColor: '#13182c',
     borderRadius: 16,
     padding: 14,
+    marginBottom: 16,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(162, 89, 255, 0.2)',
@@ -1237,135 +1323,105 @@ const overviewStyles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Filter Modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  filterModalContainer: {
-    width: '100%',
-    maxWidth: 280,
-    backgroundColor: '#161c2e',
+  // 4. Sleep Target Window Card
+  targetWindowCard: {
+    backgroundColor: '#13182c',
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
-    marginBottom: 14,
-    textAlign: 'center',
-  },
-  filterOptionItem: {
+  targetHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    marginBottom: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
-  filterOptionActive: {
-    backgroundColor: 'rgba(6, 214, 160, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(6, 214, 160, 0.3)',
-  },
-  filterOptionText: {
-    fontSize: 14,
-    color: '#ffffff',
-  },
-
-  // Info Guide Modal
-  infoModalContainer: {
-    width: '100%',
-    maxWidth: 320,
-    backgroundColor: '#161c2e',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  infoModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  infoModalTitleRow: {
+  targetLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+    flex: 1,
   },
-  infoModalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  infoModalCloseButton: {
-    padding: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  infoSectionBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  targetIconBox: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  infoSectionHeader: {
-    flexDirection: 'row',
+    backgroundColor: 'rgba(167, 139, 250, 0.15)',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
+    justifyContent: 'center',
   },
-  infoSectionHeading: {
-    fontSize: 13,
+  targetTitleCol: {
+    flex: 1,
+  },
+  targetSectionLabel: {
+    fontSize: 11,
     fontWeight: '700',
-  },
-  infoSectionText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    lineHeight: 17,
-  },
-  infoTipBox: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 209, 102, 0.08)',
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 209, 102, 0.2)',
-  },
-  infoTipTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ffd166',
+    color: '#a78bfa',
+    letterSpacing: 0.5,
     marginBottom: 3,
   },
-  infoTipText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.75)',
-    lineHeight: 16,
+  targetRangeText: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 0.2,
   },
-  infoGotItButton: {
-    backgroundColor: '#06d6a0',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  targetStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  infoGotItText: {
-    color: '#0b0e1b',
-    fontSize: 14,
+  targetStatusText: {
+    fontSize: 12,
     fontWeight: '700',
+  },
+  targetMidBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  targetMetricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  targetMetricLabel: {
+    fontSize: 11,
+    color: '#8a99ad',
+  },
+  targetMetricValue: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  targetTrackContainer: {
+    height: 4,
+    borderRadius: 2,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  trackSegment: {
+    height: '100%',
+  },
+  targetBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  targetRhythmNote: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.45)',
+  },
+  targetAnchorTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#38bdf8',
   },
 });

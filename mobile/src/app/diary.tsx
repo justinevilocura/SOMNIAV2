@@ -61,11 +61,14 @@ export default function Diary() {
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
     }
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (selectedTime) {
       if (timePickerMode === 'bedtime') {
-        setDiaryEntry({ ...diaryEntry, bedtime: selectedTime });
+        setDiaryEntry((prev) => ({ ...prev, bedtime: selectedTime }));
       } else {
-        setDiaryEntry({ ...diaryEntry, wakeTime: selectedTime });
+        setDiaryEntry((prev) => ({ ...prev, wakeTime: selectedTime }));
       }
     }
   };
@@ -74,15 +77,25 @@ export default function Diary() {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
     }
+    if (event?.type === 'dismissed') {
+      return;
+    }
     if (selectedDate) {
-      setDiaryEntry({ ...diaryEntry, date: selectedDate });
+      setDiaryEntry((prev) => ({ ...prev, date: selectedDate }));
     }
   };
 
   const formatTime = (dateInput: any) => {
     if (!dateInput) return '';
     const d = typeof dateInput === 'string' || typeof dateInput === 'number' ? new Date(dateInput) : dateInput;
-    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isNaN(d.getTime())) return '';
+    let hours = d.getHours();
+    const minutes = d.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const minsStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
+    return `${hours}:${minsStr} ${ampm}`;
   };
 
   const formatDate = (dateInput: any) => {
@@ -529,7 +542,15 @@ export default function Diary() {
       )}
       {showTimePicker && Platform.OS === 'android' && (
         <DateTimePicker
-          value={timePickerMode === 'bedtime' ? diaryEntry.bedtime : diaryEntry.wakeTime}
+          value={
+            timePickerMode === 'bedtime'
+              ? diaryEntry.bedtime instanceof Date
+                ? diaryEntry.bedtime
+                : new Date(diaryEntry.bedtime)
+              : diaryEntry.wakeTime instanceof Date
+              ? diaryEntry.wakeTime
+              : new Date(diaryEntry.wakeTime)
+          }
           mode="time"
           is24Hour={false}
           display="default"

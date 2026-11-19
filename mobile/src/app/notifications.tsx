@@ -11,17 +11,17 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import {
   requestNotificationPermissions,
   syncBedtimeNotification,
+  syncRecoveryTipNotification,
   scheduleDailyNotification,
   scheduleWeeklyNotification,
   cancelNotification,
-  scheduleSleepUpdateNotification,
 } from '../utils/notificationService';
 
 interface NotificationItem {
@@ -55,17 +55,27 @@ interface SleepStats {
   avgDuration?: string;
   efficiency?: number;
   bedtimeStr?: string;
+  windDownStr?: string;
+  wakeTimeStr?: string;
+  isCircadianShifted?: boolean;
+  circadianStatus?: 'On Track' | 'Adapting' | 'Shifted / Realigning';
   hasStrainTrigger?: boolean;
   strainReason?: string;
   loggedDaysInWindow?: number;
   latestNightDuration?: string;
+  isReboundSleep?: boolean;
 }
 
 const buildNotifications = (stats?: SleepStats): NotificationItem[] => {
   const streak = stats?.streak ?? 0;
-  const efficiency = stats?.efficiency ?? 87;
-  const avgDuration = stats?.avgDuration || '6h 59m';
+  const efficiency = stats?.efficiency ?? 97;
+  const avgDuration = stats?.avgDuration || '7h 30m';
   const bedtime = stats?.bedtimeStr || '10:30 PM';
+  const windDown = stats?.windDownStr || '10:00 PM';
+  const wakeTime = stats?.wakeTimeStr || '2:59 PM';
+  const isShifted = stats?.isCircadianShifted ?? false;
+  const circadianStatus = stats?.circadianStatus || 'On Track';
+  const isRebound = stats?.isReboundSleep ?? false;
   const hasStrainTrigger = stats?.hasStrainTrigger ?? false;
   const strainReason = stats?.strainReason || 'Triggered by sleep deficit & night strain.';
   const loggedDaysInWindow = stats?.loggedDaysInWindow ?? 3;
@@ -73,97 +83,7 @@ const buildNotifications = (stats?: SleepStats): NotificationItem[] => {
 
   const items: NotificationItem[] = [];
 
-  // 1. Sleep Risk / Update Card (Adaptive Progression)
-  if (loggedDaysInWindow === 0) {
-    // Case 0: No sleep recorded in the last 3 days
-    items.push({
-      id: 'sleep_status',
-      type: 'risk',
-      title: 'Sleep Update',
-      subtitle: 'No sleep recorded in the last 3 days. ',
-      highlightText: 'Sync Needed',
-      highlightColor: '#7b61ff',
-      date: formatToday('10:00 AM'),
-      detail:
-        'We have not detected recent sleep data from your smartwatch. Wear your device to bed tonight and pull down to sync so SOMNiA can evaluate your sleep risk and recovery score!',
-      icon: 'shield-checkmark-outline',
-      iconBg: '#10b981',
-    });
-  } else if (loggedDaysInWindow === 1) {
-    // Case 1: 1 day recorded in the 3-day window
-    const isOptimal = efficiency >= 85;
-    items.push({
-      id: 'sleep_status',
-      type: 'risk',
-      title: 'Sleep Update (Day 1 of 3)',
-      subtitle: 'Based on last night ',
-      highlightText: `(${durationText}).`,
-      highlightColor: isOptimal ? '#10b981' : '#f59e0b',
-      date: formatToday('10:00 AM'),
-      detail: `You recorded ${durationText} of sleep last night (${efficiency}% efficiency). A single night is not enough to determine insomnia risk. Log 2 more nights to unlock your official 3-day Sleep Risk assessment!`,
-      icon: isOptimal ? 'shield-checkmark-outline' : 'moon-outline',
-      iconBg: isOptimal ? '#10b981' : '#7b61ff',
-    });
-  } else if (loggedDaysInWindow === 2) {
-    // Case 2: 2 days recorded in the 3-day window
-    const isOptimal = efficiency >= 85;
-    items.push({
-      id: 'sleep_status',
-      type: 'risk',
-      title: 'Sleep Update (Day 2 of 3)',
-      subtitle: 'Based on the last 2 days ',
-      highlightText: `(${avgDuration} avg).`,
-      highlightColor: isOptimal ? '#10b981' : '#f59e0b',
-      date: formatToday('10:00 AM'),
-      detail: `Your average sleep duration is ${avgDuration} across 2 days (${efficiency}% efficiency). You need just 1 more night to complete your official 3-day Sleep Risk assessment!`,
-      icon: isOptimal ? 'shield-checkmark-outline' : 'moon-outline',
-      iconBg: isOptimal ? '#10b981' : '#7b61ff',
-    });
-  } else {
-    // Case 3: Full 3-day window recorded
-    if (efficiency >= 85) {
-      items.push({
-        id: 'sleep_status',
-        type: 'risk',
-        title: 'Sleep Update',
-        subtitle: 'Your sleep consistency is ',
-        highlightText: 'Optimal.',
-        highlightColor: '#10b981',
-        date: formatToday('10:00 AM'),
-        detail: `Your average sleep efficiency reached ${efficiency}% over the last 3 days (${avgDuration} avg). Great job maintaining an optimal, restorative sleep schedule!`,
-        icon: 'shield-checkmark-outline',
-        iconBg: '#10b981',
-      });
-    } else if (efficiency < 65) {
-      items.push({
-        id: 'sleep_status',
-        type: 'risk',
-        title: 'Risk Alert',
-        subtitle: 'Your sleep risk is now ',
-        highlightText: 'High.',
-        highlightColor: '#ef4444',
-        date: formatToday('10:00 AM'),
-        detail: `Your average sleep efficiency dropped to ${efficiency}% (${avgDuration} avg) over the last 3 days. High sleep deficit and awakenings detected. Prioritize winding down earlier tonight.`,
-        icon: 'warning-outline',
-        iconBg: '#ef4444',
-      });
-    } else {
-      items.push({
-        id: 'sleep_status',
-        type: 'risk',
-        title: 'Risk Alert',
-        subtitle: 'Your sleep risk is now ',
-        highlightText: 'Moderate.',
-        highlightColor: '#f59e0b',
-        date: formatToday('10:00 AM'),
-        detail: `Your average sleep efficiency is ${efficiency}% (${avgDuration} avg) over the last 3 days. Consider winding down 30 minutes earlier to reduce night awakenings.`,
-        icon: 'warning-outline',
-        iconBg: '#eb5757',
-      });
-    }
-  }
-
-  // 2. Bedtime Reminder Card (dynamically reflects confirmed consecutive streak)
+  // 1. Bedtime Reminder Card (dynamically synced with Sleep Target Window)
   let streakSentence = 'Log your sleep tonight to start your healthy sleep streak!';
   if (streak === 1) {
     streakSentence = "You've logged your sleep last night — keep the streak going!";
@@ -171,40 +91,63 @@ const buildNotifications = (stats?: SleepStats): NotificationItem[] => {
     streakSentence = `You've logged your sleep ${streak} nights in a row — keep the streak going!`;
   }
 
+  let bedtimeSubtitle = `Scheduled for tonight at ${bedtime}.`;
+  let bedtimeDetail = `Your target bedtime is set for ${bedtime}. ${streakSentence} We'll alert you at ${windDown} so you can start winding down.`;
+
+  if (circadianStatus === 'Shifted / Realigning' || isShifted) {
+    bedtimeSubtitle = `Realigning target: tonight at ${bedtime}.`;
+    bedtimeDetail = `Your sleep rhythm is currently realigning. To gradually shift earlier from yesterday's schedule, your recovery bedtime target for tonight is set to ${bedtime} (wind-down reminder at ${windDown}). ${streakSentence} Stepping 45 minutes earlier helps protect your biological clock.`;
+  } else if (circadianStatus === 'Adapting') {
+    bedtimeSubtitle = `Adapting target: tonight at ${bedtime}.`;
+    bedtimeDetail = `Your target bedtime is set for ${bedtime} (wind-down at ${windDown}) as your schedule adapts. ${streakSentence} Stick to this window to stabilize your rhythm.`;
+  }
+
   items.push({
     id: 'bedtime_reminder',
     type: 'bedtime',
     title: 'Bedtime Reminder',
-    subtitle: `Scheduled for tonight at ${bedtime}.`,
+    subtitle: bedtimeSubtitle,
     date: formatToday(bedtime),
-    detail: `Your target bedtime is set for ${bedtime}. ${streakSentence} We'll alert you 30 minutes before bedtime so you can start winding down.`,
+    detail: bedtimeDetail,
     icon: 'moon',
     iconBg: '#7b61ff',
   });
 
-  // 3. Recovery Tip Card (Always visible when Recovery Tips is enabled, with smart contextual messaging)
-  const tipSubtitle =
-    hasStrainTrigger && loggedDaysInWindow > 0
-      ? strainReason
-      : 'Try 10-minute breathing exercise before bed.';
-
-  const introText =
-    hasStrainTrigger && loggedDaysInWindow > 0
-      ? 'Your recent sleep data indicated shorter rest or increased awakenings. Slow, paced breathing lowers heart rate, increases HRV, and helps your nervous system wind down.'
-      : 'Slow, paced breathing lowers resting heart rate and helps you fall asleep faster.';
-
-  const tipDetail = `${introText}\n\nHow to do the 4-7-8 technique:\n• Inhale quietly through your nose for 4s\n• Hold your breath gently for 7s\n• Exhale completely through your mouth for 8s\n\nRepeat for 4 cycles in bed to trigger natural sleepiness.`;
-
-  items.push({
-    id: 'recovery_tip',
-    type: 'tip',
-    title: 'Recovery Tip',
-    subtitle: tipSubtitle,
-    date: formatToday('6:00 PM'),
-    detail: tipDetail,
-    icon: 'heart-outline',
-    iconBg: '#22c55e',
-  });
+  // 2. Recovery Tip Card — mirrors the overview Recovery Recommendation
+  if (circadianStatus === 'Shifted / Realigning' || isShifted) {
+    items.push({
+      id: 'recovery_tip',
+      type: 'tip',
+      title: 'Recovery Tip',
+      subtitle: `Circadian realignment (woke up at ${wakeTime}).`,
+      date: formatToday('6:00 PM'),
+      detail: `Extended rebound sleep detected with a significant circadian shift (woke up at ${wakeTime}). While your body caught up on physical rest, your circadian rhythm is out of sync. Avoid late naps today and gradually move your bedtime earlier in 30–45 minute increments to realign your rhythm.\n\n• Get outdoor bright sunlight exposure as soon as possible\n• Avoid caffeine and naps after 4:00 PM to build natural sleep drive\n• Begin dimming lights and wind down at ${windDown}\n• Aim to sleep at your recovery target window (${bedtime})\n\nGradually stepping your schedule earlier each night protects daytime energy and prevents insomnia.`,
+      icon: 'sunny-outline',
+      iconBg: '#f59e0b',
+    });
+  } else if (hasStrainTrigger && loggedDaysInWindow > 0) {
+    items.push({
+      id: 'recovery_tip',
+      type: 'tip',
+      title: 'Recovery Tip',
+      subtitle: strainReason,
+      date: formatToday('6:00 PM'),
+      detail: `Your recent sleep data indicated shorter rest or elevated sleep deficit. Support restorative recovery with these techniques:\n\n• Keep your bedroom cool (18–20°C / 65–68°F) for deep sleep continuity\n• Avoid heavy meals within 2 hours of bedtime\n• Practice 4-7-8 breathing in bed to down-regulate your nervous system\n\nPrioritizing an earlier wind-down mitigates cumulative fatigue.`,
+      icon: 'heart-outline',
+      iconBg: '#22c55e',
+    });
+  } else {
+    items.push({
+      id: 'recovery_tip',
+      type: 'tip',
+      title: 'Recovery Tip',
+      subtitle: 'Try 10-minute breathing exercise before bed.',
+      date: formatToday('6:00 PM'),
+      detail: `Slow, paced breathing lowers resting heart rate and helps you fall asleep faster.\n\nHow to do the 4-7-8 technique:\n• Inhale quietly through your nose for 4s\n• Hold your breath gently for 7s\n• Exhale completely through your mouth for 8s\n\nRepeat for 4 cycles in bed to trigger natural sleepiness.`,
+      icon: 'heart-outline',
+      iconBg: '#22c55e',
+    });
+  }
 
   return items;
 };
@@ -215,7 +158,6 @@ export default function NotificationsScreen() {
 
   // Individual notification category states
   const [bedtimeReminder, setBedtimeReminder] = useState(true);
-  const [riskAlerts, setRiskAlerts] = useState(true);
   const [recoveryTips, setRecoveryTips] = useState(true);
   const [syncReminder, setSyncReminder] = useState(false);
   const [weeklyInsights, setWeeklyInsights] = useState(false);
@@ -227,12 +169,19 @@ export default function NotificationsScreen() {
 
   // Master switch state (true if all active)
   const isAllEnabled =
-    bedtimeReminder && riskAlerts && recoveryTips && syncReminder && weeklyInsights;
+    bedtimeReminder && recoveryTips && syncReminder && weeklyInsights;
 
-  useEffect(() => {
-    initScreen();
-    fetchSleepStats();
-  }, []);
+  // Re-run on every screen focus so goal changes are picked up immediately
+  const initDone = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!initDone.current) {
+        initScreen();
+        initDone.current = true;
+      }
+      fetchSleepStats();
+    }, [])
+  );
 
   useEffect(() => {
     if (params.openSettings === 'true') {
@@ -254,7 +203,6 @@ export default function NotificationsScreen() {
       if (stored) {
         const parsed = JSON.parse(stored);
         setBedtimeReminder(parsed.bedtimeReminder ?? true);
-        setRiskAlerts(parsed.riskAlerts ?? true);
         setRecoveryTips(parsed.recoveryTips ?? true);
         setSyncReminder(parsed.syncReminder ?? false);
         setWeeklyInsights(parsed.weeklyInsights ?? false);
@@ -273,162 +221,405 @@ export default function NotificationsScreen() {
 
   const fetchSleepStats = async () => {
     try {
-      // 1. Get user bedtime goal
-      let bedtimeStr = '10:30 PM';
-      let targetHour = 22;
-      let targetMinute = 30;
+      // ── 1. Load user sleep goal ──────────────────────────────────────────
+      let goalSleepHours = 8.0;
       try {
         const goalsStr = await AsyncStorage.getItem('sleepGoals');
         if (goalsStr) {
-          const parsed = JSON.parse(goalsStr);
-          if (parsed.bedtimeHour !== undefined) {
-            targetHour = parsed.bedtimeHour;
-            targetMinute = parsed.bedtimeMinute !== undefined ? parsed.bedtimeMinute : 0;
-            const ampm = targetHour >= 12 ? 'PM' : 'AM';
-            const dh = targetHour % 12 || 12;
-            const dm = targetMinute < 10 ? `0${targetMinute}` : targetMinute;
-            bedtimeStr = `${dh}:${dm} ${ampm}`;
+          const goals = JSON.parse(goalsStr);
+          if (goals.sleepDuration && typeof goals.sleepDuration === 'number') {
+            goalSleepHours = goals.sleepDuration;
           }
         }
       } catch (_) {}
 
-      // 2. Fetch sleep history from backend
+      // ── 2. Fetch backend sessions ────────────────────────────────────────
       const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
       const token = await AsyncStorage.getItem('token');
 
       if (!token) {
-        setNotifications(buildNotifications({ bedtimeStr }));
+        setNotifications(buildNotifications());
         return;
       }
 
-      const response = await fetch(`${backendUrl}/api/sleepSession/history`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      let allSessions: any[] = [];
+      try {
+        const response = await fetch(`${backendUrl}/api/sleepSession/history`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const json = await response.json();
+        if (json.success && json.data?.sessions?.length) {
+          allSessions = [...json.data.sessions];
+        }
+      } catch (err) {
+        console.warn('Notifications: backend history error:', err);
+      }
 
-      const json = await response.json();
+      // ── 3. Merge manual sleep logs ───────────────────────────────────────
+      try {
+        const storedLogs = await AsyncStorage.getItem('sleepLogs');
+        if (storedLogs) {
+          const parsed = JSON.parse(storedLogs);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((l: any) => {
+              if (l.date || l.bedtime) {
+                const bTime = l.bedtime ? new Date(l.bedtime) : new Date(l.date);
+                const wTime = l.wakeTime
+                  ? new Date(l.wakeTime)
+                  : new Date(bTime.getTime() + (l.totalDurationMinutes || 450) * 60000);
+                allSessions.push({
+                  startTime: bTime.toISOString(),
+                  endTime: wTime.toISOString(),
+                  durationHours: (l.totalDurationMinutes || 450) / 60,
+                });
+              }
+            });
+          }
+        }
+      } catch (_) {}
 
-      if (json.success && json.data && json.data.sessions) {
-        let totalHours = 0;
-        let daysWithSleep = 0;
-        let latestNightHours = 0;
+      // ── 4. Merge sleep diary entries ─────────────────────────────────────
+      try {
+        const storedDiary = await AsyncStorage.getItem('sleepDiaryEntries');
+        if (storedDiary) {
+          const parsedDiary = JSON.parse(storedDiary);
+          if (Array.isArray(parsedDiary)) {
+            parsedDiary.forEach((d: any) => {
+              if (d.bedtime && d.wakeTime) {
+                const bTime = new Date(d.bedtime);
+                let wTime = new Date(d.wakeTime);
+                if (wTime.getTime() <= bTime.getTime()) {
+                  wTime = new Date(wTime.getTime() + 24 * 3600000);
+                }
+                allSessions.push({
+                  startTime: bTime.toISOString(),
+                  endTime: wTime.toISOString(),
+                  durationHours: (wTime.getTime() - bTime.getTime()) / 3600000,
+                });
+              }
+            });
+          }
+        }
+      } catch (_) {}
 
-        // 1. Gather sleep duration for each of the last 7 calendar days
-        const dailyRecords: { date: Date; hours: number }[] = [];
-
-        for (let i = 6; i >= 0; i--) {
-          const targetDate = new Date();
-          targetDate.setDate(targetDate.getDate() - i);
-
-          const sessionsForDay = json.data.sessions.filter((session: any) => {
-            const sessionDate = new Date(session.endTime || session.startTime);
-            return sessionDate.toDateString() === targetDate.toDateString();
-          });
-
-          let dayHours = 0;
-          sessionsForDay.forEach((s: any) => {
-            if (s.durationHours) {
-              dayHours += s.durationHours;
-            } else if (s.durationMinutes) {
-              dayHours += s.durationMinutes / 60;
-            } else if (s.startTime && s.endTime) {
-              const start = new Date(s.startTime).getTime();
-              const end = new Date(s.endTime).getTime();
-              if (end > start) {
-                dayHours += (end - start) / (1000 * 60 * 60);
+      // ── 5. Merge wearable cache ──────────────────────────────────────────
+      let cachedWearable: any = null;
+      try {
+        const cwStr = await AsyncStorage.getItem('latestWearableSleep');
+        if (cwStr) {
+          cachedWearable = JSON.parse(cwStr);
+          if (cachedWearable && (cachedWearable.date || cachedWearable.endTime)) {
+            const wDate = cachedWearable.date || cachedWearable.endTime;
+            const exists = allSessions.some(
+              (s: any) =>
+                new Date(s.endTime || s.startTime).toDateString() === new Date(wDate).toDateString()
+            );
+            if (!exists) {
+              const durH =
+                cachedWearable.hours !== undefined
+                  ? cachedWearable.hours + (cachedWearable.minutes || 0) / 60
+                  : (cachedWearable.totalMinutes || 0) / 60;
+              if (durH > 0) {
+                allSessions.push({
+                  startTime:
+                    cachedWearable.startTime ||
+                    new Date(new Date(wDate).getTime() - durH * 3600000).toISOString(),
+                  endTime: cachedWearable.endTime || wDate,
+                  durationHours: durH,
+                });
               }
             }
-          });
-
-          const validHours = dayHours > 0 && dayHours < 16 ? dayHours : 0;
-          dailyRecords.push({ date: targetDate, hours: validHours });
-          if (validHours > 0) {
-            latestNightHours = validHours;
           }
         }
+      } catch (_) {}
 
-        // 2. Calculate strictly the LAST 3 DAYS average (Today, Yesterday, 2 Days Ago)
-        const recent3Days = dailyRecords.slice(-3);
-        const loggedInLast3 = recent3Days.filter((d) => d.hours > 0);
-        const loggedDaysInWindow = loggedInLast3.length;
-
-        let threeDayAvgVal = 0;
-        if (loggedDaysInWindow > 0) {
-          const threeDayTotal = loggedInLast3.reduce((sum, d) => sum + d.hours, 0);
-          threeDayAvgVal = threeDayTotal / loggedDaysInWindow;
+      // ── 6. Helper: session net hours ─────────────────────────────────────
+      const getSessionHours = (s: any): number => {
+        if (s.durationHours !== undefined && s.durationHours !== null) return s.durationHours;
+        if (s.durationMinutes !== undefined && s.durationMinutes !== null) return s.durationMinutes / 60;
+        if (s.startTime && s.endTime) {
+          const diff = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000;
+          if (diff > 0) return diff;
         }
+        return 0;
+      };
 
-        const avgH = Math.floor(threeDayAvgVal);
-        const avgM = Math.round((threeDayAvgVal - avgH) * 60);
-        const formattedAvg = avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`;
+      const now = new Date();
 
-        let efficiency = threeDayAvgVal > 0 ? (threeDayAvgVal / 8) * 100 : 0;
-        efficiency = Math.min(100, Math.round(efficiency));
+      // ── 7. Build per-day records for the last 7 days ─────────────────────
+      const dailyRecords: { date: Date; hours: number }[] = [];
+      let latestNightHours = 0;
 
-        const lH = Math.floor(latestNightHours);
-        const lM = Math.round((latestNightHours - lH) * 60);
-        const latestNightDuration = lM > 0 ? `${lH}h ${lM}m` : `${lH}h`;
+      for (let i = 6; i >= 0; i--) {
+        const targetDate = new Date(now);
+        targetDate.setDate(now.getDate() - i);
+        const targetDateStr = targetDate.toDateString();
 
-        // Biometric trigger condition for Recovery Tip:
-        // Appears if recent 3-day efficiency is below 82% OR latest night was short (< 6.2 hours)
-        const hasStrain = loggedDaysInWindow > 0 && (efficiency < 82 || (latestNightHours > 0 && latestNightHours < 6.2));
-        let strainReason = 'Triggered by sleep deficit & night strain.';
-        if (latestNightHours > 0 && latestNightHours < 6.0) {
-          strainReason = `Triggered by short sleep (${latestNightDuration} last night).`;
-        } else if (efficiency < 82) {
-          strainReason = `Triggered by sleep efficiency drop (${efficiency}%).`;
-        }
+        const sessionsForDay = allSessions.filter((s: any) => {
+          const endStr = s.endTime ? new Date(s.endTime).toDateString() : '';
+          const startStr = s.startTime ? new Date(s.startTime).toDateString() : '';
+          return endStr === targetDateStr || (!endStr && startStr === targetDateStr);
+        });
 
-        // Calculate verified consecutive days logged streak
-        const hasSessionOnDay = (daysAgo: number) => {
-          const d = new Date();
-          d.setDate(d.getDate() - daysAgo);
-          return json.data.sessions.some((session: any) => {
-            const sDate = new Date(session.endTime || session.startTime);
-            return sDate.toDateString() === d.toDateString();
-          });
-        };
+        let dayHours = 0;
+        sessionsForDay.forEach((s: any) => { dayHours += getSessionHours(s); });
 
-        let verifiedStreak = 0;
-        // Start from today if woke up and logged today, otherwise start from yesterday
-        const loggedToday = hasSessionOnDay(0);
-        const startDay = loggedToday ? 0 : 1;
-
-        for (let d = startDay; d < 30; d++) {
-          if (hasSessionOnDay(d)) {
-            verifiedStreak++;
-          } else {
-            break; // unbroken streak stopped
-          }
-        }
-
-        setNotifications(
-          buildNotifications({
-            streak: verifiedStreak,
-            avgDuration: formattedAvg,
-            efficiency: efficiency,
-            bedtimeStr,
-            hasStrainTrigger: hasStrain,
-            strainReason,
-            loggedDaysInWindow,
-            latestNightDuration,
-          })
-        );
-
-        // Schedule the 10:00 AM Sleep Update push with fresh risk data
-        await scheduleSleepUpdateNotification(efficiency, loggedDaysInWindow);
-
-        return;
+        const validHours = dayHours > 0 && dayHours < 16 ? dayHours : 0;
+        dailyRecords.push({ date: targetDate, hours: validHours });
+        if (validHours > 0) latestNightHours = validHours;
       }
+
+      // ── 8. Last-3-day stats ──────────────────────────────────────────────
+      const recent3Days = dailyRecords.slice(-3);
+      const loggedInLast3 = recent3Days.filter((d) => d.hours > 0);
+      const loggedDaysInWindow = loggedInLast3.length;
+
+      let threeDayAvgVal = 0;
+      if (loggedDaysInWindow > 0) {
+        threeDayAvgVal = loggedInLast3.reduce((sum, d) => sum + d.hours, 0) / loggedDaysInWindow;
+      }
+
+      const avgH = Math.floor(threeDayAvgVal);
+      const avgM = Math.round((threeDayAvgVal - avgH) * 60);
+      const formattedAvg = avgM > 0 ? `${avgH}h ${avgM}m` : `${avgH}h`;
+
+      const lH = Math.floor(latestNightHours);
+      const lM = Math.round((latestNightHours - lH) * 60);
+      const latestNightDuration = lM > 0 ? `${lH}h ${lM}m` : `${lH}h`;
+
+      // ── 9. Realistic efficiency from wearable or stage data ──────────────
+      let efficiency = 0;
+      // Prefer wearable efficiency if available and recent
+      if (
+        cachedWearable?.efficiency !== undefined &&
+        cachedWearable.efficiency > 0 &&
+        cachedWearable.efficiency <= 100
+      ) {
+        efficiency = Math.round(cachedWearable.efficiency);
+      } else if (
+        cachedWearable?.deepMinutes !== undefined &&
+        cachedWearable?.remMinutes !== undefined &&
+        cachedWearable?.lightMinutes !== undefined
+      ) {
+        // Calculate from stage breakdown: (Deep + REM + Light) / total * 100 capped at ~97
+        const deepM = cachedWearable.deepMinutes || 0;
+        const remM = cachedWearable.remMinutes || 0;
+        const lightM = cachedWearable.lightMinutes || 0;
+        const awakeM = cachedWearable.awakeMinutes || 0;
+        const totalM = deepM + remM + lightM + awakeM;
+        if (totalM > 0) {
+          const rawEff = ((deepM + remM + lightM) / totalM) * 100;
+          // Apply 3% natural micro-arousal deduction for clinical realism
+          efficiency = Math.min(97, Math.round(rawEff * 0.97));
+        }
+      }
+      // Fallback: duration-based (capped at 97 for realism)
+      if (efficiency === 0 && threeDayAvgVal > 0) {
+        efficiency = Math.min(97, Math.round((threeDayAvgVal / (goalSleepHours || 8.0)) * 100));
+      }
+
+      // ── 10. Circadian shift detection — ONLY from sessions in the last 7 days ──
+      let isCircadianShifted = false;
+      let circadianStatus: 'On Track' | 'Adapting' | 'Shifted / Realigning' = 'On Track';
+
+      // Always start from the user's saved sleep goal as the bedtime default
+      let goalBedtimeStr = '10:30 PM';
+      let goalWindDownStr = '10:00 PM';
+      let goalTargetHour = 22;
+      let goalTargetMinute = 30;
+      try {
+        const goalsStr2 = await AsyncStorage.getItem('sleepGoals');
+        if (goalsStr2) {
+          const g = JSON.parse(goalsStr2);
+          if (g.bedtimeHour !== undefined) {
+            goalTargetHour = g.bedtimeHour;
+            goalTargetMinute = g.bedtimeMinute ?? 0;
+            const ampm = goalTargetHour >= 12 ? 'PM' : 'AM';
+            const dh = goalTargetHour % 12 || 12;
+            const dm = String(goalTargetMinute).padStart(2, '0');
+            goalBedtimeStr = `${dh}:${dm} ${ampm}`;
+            const wdMins = ((goalTargetHour * 60 + goalTargetMinute - 30) + 1440) % 1440;
+            const wdH = Math.floor(wdMins / 60) % 12 || 12;
+            const wdAmpm = Math.floor(wdMins / 60) >= 12 ? 'PM' : 'AM';
+            goalWindDownStr = `${wdH}:${String(wdMins % 60).padStart(2, '0')} ${wdAmpm}`;
+          }
+        }
+      } catch (_) {}
+
+      let dynamicBedtimeStr = goalBedtimeStr;
+      let dynamicWindDownStr = goalWindDownStr;
+      let dynamicTargetHour = goalTargetHour;
+      let dynamicTargetMinute = goalTargetMinute;
+
+      const formatMinutesToClock = (totalMins: number): string => {
+        const normalized = ((totalMins % 1440) + 1440) % 1440;
+        let hours = Math.floor(normalized / 60);
+        const mins = normalized % 60;
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        const mStr = mins < 10 ? `0${mins}` : `${mins}`;
+        return `${hours}:${mStr} ${ampm}`;
+      };
+
+      // Only detect circadian shift from sessions within the last 7 days
+      // so stale old diary entries don't corrupt the bedtime target
+      const recentSessions = allSessions.filter((s: any) => {
+        const sessionTime = new Date(s.endTime || s.startTime).getTime();
+        const diffDays = (now.getTime() - sessionTime) / (1000 * 3600 * 24);
+        return diffDays >= 0 && diffDays <= 7.5;
+      });
+
+      let wakeTimeDisplay = '2:59 PM';
+
+      if (recentSessions.length > 0) {
+        // Sort newest first — detect circadian shift even without last-3-day data
+        // so the bedtime reminder stays in sync with the overview Sleep Target Window
+        const sorted = [...recentSessions].sort(
+          (a, b) =>
+            new Date(b.endTime || b.startTime).getTime() -
+            new Date(a.endTime || a.startTime).getTime()
+        );
+        const latest = sorted[0];
+
+        let sessionWakeMins: number | null = null;
+        let sessionBedMins: number | null = null;
+
+        if (latest.endTime) {
+          const eD = new Date(latest.endTime);
+          sessionWakeMins = eD.getHours() * 60 + eD.getMinutes();
+          const h = eD.getHours();
+          const m = eD.getMinutes();
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const dh = h % 12 || 12;
+          wakeTimeDisplay = `${dh}:${m < 10 ? '0' : ''}${m} ${ampm}`;
+        }
+        if (latest.startTime) {
+          const sD = new Date(latest.startTime);
+          sessionBedMins = sD.getHours() * 60 + sD.getMinutes();
+        }
+
+        // Afternoon wake-up (>= 12:30 PM) or sleeping past 2:30 AM = circadian shifted
+        isCircadianShifted =
+          (sessionWakeMins !== null && (sessionWakeMins >= 12 * 60 + 30 || sessionWakeMins < 5 * 60)) ||
+          (sessionBedMins !== null && sessionBedMins >= 2 * 60 + 30 && sessionBedMins < 12 * 60);
+
+        // Compute baseline ideal bedtime anchored to normal morning wake times
+        const normalMorningWakeMins: number[] = [];
+        recentSessions.forEach((s: any) => {
+          if (s.endTime) {
+            const eD = new Date(s.endTime);
+            const wMins = eD.getHours() * 60 + eD.getMinutes();
+            if (wMins >= 300 && wMins <= 630) normalMorningWakeMins.push(wMins);
+          }
+        });
+        const anchorWakeMins =
+          normalMorningWakeMins.length > 0
+            ? Math.round(normalMorningWakeMins.reduce((a, b) => a + b, 0) / normalMorningWakeMins.length)
+            : 7 * 60;
+        const goalMinutes = Math.round((goalSleepHours || 8.0) * 60);
+        const baselineIdealBedtimeMins = (((anchorWakeMins - goalMinutes) % 1440) + 1440) % 1440;
+
+        let targetBedtimeMins = baselineIdealBedtimeMins;
+
+        if (isCircadianShifted && sessionBedMins !== null) {
+          circadianStatus = 'Shifted / Realigning';
+          // 45 min step earlier from shifted bedtime, rounded to 30-min block
+          const shiftedEarlier = (((sessionBedMins - 45) % 1440) + 1440) % 1440;
+          targetBedtimeMins = Math.floor(shiftedEarlier / 30) * 30;
+        } else if (sessionBedMins !== null) {
+          let bedDiff = Math.abs(sessionBedMins - baselineIdealBedtimeMins);
+          if (bedDiff > 720) bedDiff = 1440 - bedDiff;
+          if (bedDiff > 45) {
+            circadianStatus = 'Adapting';
+            const shiftedEarlier = (((sessionBedMins - 30) % 1440) + 1440) % 1440;
+            targetBedtimeMins = Math.floor(shiftedEarlier / 30) * 30;
+          }
+        }
+
+        if (circadianStatus !== 'On Track') {
+          // Wind-down = 45 min before target bedtime
+          const windDownMins = (((targetBedtimeMins - 45) % 1440) + 1440) % 1440;
+          dynamicBedtimeStr = formatMinutesToClock(targetBedtimeMins);
+          dynamicWindDownStr = formatMinutesToClock(windDownMins);
+          const normalizedBed = ((targetBedtimeMins % 1440) + 1440) % 1440;
+          dynamicTargetHour = Math.floor(normalizedBed / 60);
+          dynamicTargetMinute = normalizedBed % 60;
+        }
+        // If On Track → keep goal bedtime (already set as default above)
+      }
+
+      // ── 11. Rebound sleep flag ───────────────────────────────────────────
+      const isReboundSleep = latestNightHours > 10.0;
+
+      // ── 12. Strain trigger ───────────────────────────────────────────────
+      const hasStrain =
+        loggedDaysInWindow > 0 && (efficiency < 82 || (latestNightHours > 0 && latestNightHours < 6.2));
+      let strainReason = 'Triggered by sleep deficit & night strain.';
+      if (latestNightHours > 0 && latestNightHours < 6.0) {
+        strainReason = `Triggered by short sleep (${latestNightDuration} last night).`;
+      } else if (efficiency < 82) {
+        strainReason = `Triggered by sleep efficiency drop (${efficiency}%).`;
+      }
+
+      // ── 13. Verified streak ──────────────────────────────────────────────
+      const hasSessionOnDay = (daysAgo: number) => {
+        const d = new Date(now);
+        d.setDate(now.getDate() - daysAgo);
+        const dStr = d.toDateString();
+        return allSessions.some((s: any) => {
+          const sDate = new Date(s.endTime || s.startTime).toDateString();
+          return sDate === dStr;
+        });
+      };
+
+      let verifiedStreak = 0;
+      const loggedToday = hasSessionOnDay(0);
+      const startDay = loggedToday ? 0 : 1;
+      for (let d = startDay; d < 30; d++) {
+        if (hasSessionOnDay(d)) {
+          verifiedStreak++;
+        } else {
+          break;
+        }
+      }
+
+      // ── 14. Build dynamic notifications ──────────────────────────────────
+      setNotifications(
+        buildNotifications({
+          streak: verifiedStreak,
+          avgDuration: formattedAvg,
+          efficiency,
+          bedtimeStr: dynamicBedtimeStr,
+          windDownStr: dynamicWindDownStr,
+          wakeTimeStr: wakeTimeDisplay,
+          isCircadianShifted,
+          circadianStatus,
+          isReboundSleep,
+          hasStrainTrigger: hasStrain,
+          strainReason,
+          loggedDaysInWindow,
+          latestNightDuration,
+        })
+      );
+
+      // ── 15. Sync push notifications ──────────────────────────────────────
+      await syncBedtimeNotification(dynamicTargetHour, dynamicTargetMinute);
+
+      // Schedule daily 6:00 PM Recovery Tip push
+      let tipPushBody =
+        'Slow, paced breathing lowers resting heart rate. Try the 4-7-8 technique before bed to fall asleep faster.';
+      if (circadianStatus === 'Shifted / Realigning' || isCircadianShifted) {
+        tipPushBody = `Circadian shift detected (woke up at ${wakeTimeDisplay}). Avoid late naps today, wind down at ${dynamicWindDownStr}, and aim for bed at ${dynamicBedtimeStr}.`;
+      } else if (hasStrain) {
+        tipPushBody =
+          'Sleep deficit or strain detected. Keep your bedroom cool and practice 4-7-8 breathing before bed to support deeper sleep.';
+      }
+      await syncRecoveryTipNotification(tipPushBody, '🌿 Sleep Recovery Tip');
     } catch (err) {
       console.warn('Could not fetch dynamic sleep stats for notifications:', err);
+      setNotifications(buildNotifications());
     }
-
-    setNotifications(buildNotifications());
-    // No data available — schedule a "sync needed" push
-    await scheduleSleepUpdateNotification(0, 0);
   };
 
   const saveSettings = async (newSettings: any) => {
@@ -468,14 +659,12 @@ export default function NotificationsScreen() {
     }
 
     setBedtimeReminder(value);
-    setRiskAlerts(value);
     setRecoveryTips(value);
     setSyncReminder(value);
     setWeeklyInsights(value);
 
     await saveSettings({
       bedtimeReminder: value,
-      riskAlerts: value,
       recoveryTips: value,
       syncReminder: value,
       weeklyInsights: value,
@@ -509,6 +698,7 @@ export default function NotificationsScreen() {
         '📈 Your Weekly Sleep Insights Are Ready',
         'Check your SOMNiA weekly sleep report to see how you performed!'
       );
+      await syncRecoveryTipNotification();
       Alert.alert('✅ All Notifications Enabled', 'All reminder categories are now active.');
     } else {
       await cancelNotification('bedtime');
@@ -556,11 +746,6 @@ export default function NotificationsScreen() {
     }
   };
 
-  const toggleRiskAlerts = async (value: boolean) => {
-    setRiskAlerts(value);
-    await saveSettings({ riskAlerts: value });
-  };
-
   const toggleRecoveryTips = async (value: boolean) => {
     if (value && !permGranted) {
       const granted = await requestNotificationPermissions();
@@ -575,7 +760,10 @@ export default function NotificationsScreen() {
     await saveSettings({ recoveryTips: value });
 
     if (value) {
-      Alert.alert('✅ Recovery Tips Active', 'Smart tips will appear when physiological strain or sleep deficit is detected.');
+      await syncRecoveryTipNotification();
+      Alert.alert('✅ Recovery Tip Active', 'You will receive your recovery tip push notification every evening at 6:00 PM.');
+    } else {
+      await cancelNotification('recoveryTips');
     }
   };
 
@@ -636,7 +824,6 @@ export default function NotificationsScreen() {
 
   // Filter feed based on user's active categories
   const visibleNotifications = notifications.filter((item) => {
-    if (item.type === 'risk' && !riskAlerts) return false;
     if (item.type === 'bedtime' && !bedtimeReminder) return false;
     if (item.type === 'tip' && !recoveryTips) return false;
     return true;
@@ -826,28 +1013,7 @@ export default function NotificationsScreen() {
 
               <View style={styles.modalDivider} />
 
-              {/* 2. Sleep Updates */}
-              <View style={styles.settingRow}>
-                <View style={[styles.modalIconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                  <Ionicons name="shield-checkmark-outline" size={22} color="#10b981" />
-                </View>
-                <View style={styles.textContainer}>
-                  <Text style={styles.settingTitle}>Sleep Updates</Text>
-                  <Text style={styles.settingDesc}>
-                    Daily sleep status updates and risk alerts based on your 3-day trend.
-                  </Text>
-                </View>
-                <Switch
-                  trackColor={{ false: '#3a3a5a', true: '#10b981' }}
-                  thumbColor={riskAlerts ? '#fff' : '#f4f3f4'}
-                  onValueChange={toggleRiskAlerts}
-                  value={riskAlerts}
-                />
-              </View>
-
-              <View style={styles.modalDivider} />
-
-              {/* 3. Recovery Tips */}
+              {/* 2. Recovery Tips */}
               <View style={styles.settingRow}>
                 <View style={[styles.modalIconContainer, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
                   <Ionicons name="heart-outline" size={22} color="#22c55e" />
@@ -855,7 +1021,7 @@ export default function NotificationsScreen() {
                 <View style={styles.textContainer}>
                   <Text style={styles.settingTitle}>Recovery Tips</Text>
                   <Text style={styles.settingDesc}>
-                    Smart relaxation advice when sleep fatigue or strain is detected.
+                    Daily advice at 6:00 PM tailored to your recovery, strain, or schedule.
                   </Text>
                 </View>
                 <Switch

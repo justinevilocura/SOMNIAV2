@@ -52,6 +52,12 @@ export default function SleepLog() {
   });
   const [timePickerMode, setTimePickerMode] = useState<'bedtime' | 'wakeTime'>('bedtime');
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [recordedDuration, setRecordedDuration] = useState<{
+    hours: number;
+    mins: number;
+    formatted: string;
+  } | null>(null);
+  const [isCustomTimeModified, setIsCustomTimeModified] = useState(false);
 
   // Sleep Quality State
   const [sleepQuality, setSleepQuality] = useState<QualityOption>('Good');
@@ -282,9 +288,19 @@ export default function SleepLog() {
    */
   const fetchDataForSelectedDate = async (targetDate: Date) => {
     setLoadingDateData(true);
+    setIsCustomTimeModified(false);
     try {
       const token = await AsyncStorage.getItem('token');
       const targetDateStr = targetDate.toDateString();
+
+      // Read cached wearable sleep (from Health Connect)
+      let cachedWearable: any = null;
+      try {
+        const cwStr = await AsyncStorage.getItem('latestWearableSleep');
+        if (cwStr) {
+          cachedWearable = JSON.parse(cwStr);
+        }
+      } catch (_) {}
 
       // 1. Check if user already saved a manual sleep log for this date
       const localLogsStr = await AsyncStorage.getItem('sleepLogs');
@@ -300,6 +316,18 @@ export default function SleepLog() {
           setSleepQuality(matchedLocal.sleepQuality || 'Good');
           setStressLevel(matchedLocal.stressLevel || 'High');
           setNotes(matchedLocal.notes || '');
+
+          if (matchedLocal.durationFormatted) {
+            const match = matchedLocal.durationFormatted.match(/(\d+)h\s*(\d+)?m?/);
+            const h = match ? parseInt(match[1]) : Math.floor((matchedLocal.totalDurationMinutes || 420) / 60);
+            const m = match ? (parseInt(match[2]) || 0) : ((matchedLocal.totalDurationMinutes || 420) % 60);
+            setRecordedDuration({ hours: h, mins: m, formatted: matchedLocal.durationFormatted });
+          } else if (matchedLocal.totalDurationMinutes) {
+            const h = Math.floor(matchedLocal.totalDurationMinutes / 60);
+            const m = matchedLocal.totalDurationMinutes % 60;
+            setRecordedDuration({ hours: h, mins: m, formatted: `${h}h ${m}m` });
+          }
+
           setHasDataForSelectedDate(true);
           setLoadingDateData(false);
           return;
@@ -368,7 +396,7 @@ export default function SleepLog() {
                       deepMs += duration;
                     }
 
-                    // REM sleep: Health Connect SleepStageType.REM is strictly 6 (Stage 4 is LIGHT sleep, never REM!)
+                    // REM sleep: Health Connect SleepStageType.REM is strictly 6
                     const isRem =
                       stage.stage === 6 ||
                       stage.stage === '6' ||
@@ -379,6 +407,10 @@ export default function SleepLog() {
                     }
                   }
                 });
+              } else if (session.durationHours !== undefined && session.durationHours !== null) {
+                totalSleepMs += session.durationHours * 3600000;
+              } else if (session.durationMinutes !== undefined && session.durationMinutes !== null) {
+                totalSleepMs += session.durationMinutes * 60000;
               } else {
                 const sStart = new Date(session.startTime).getTime();
                 const sEnd = new Date(session.endTime).getTime();
@@ -391,7 +423,30 @@ export default function SleepLog() {
               }
             });
 
-            const totalHours = totalSleepMs / 3600000;
+            // Calculate net sleep duration in hours & minutes matching Sleep Reports
+            let netTotalMinutes = Math.round(totalSleepMs / 60000);
+            let netH = Math.floor(netTotalMinutes / 60);
+            let netM = netTotalMinutes % 60;
+            let finalFormatted = `${netH}h ${netM}m`;
+
+            // If this session matches the latest wearable sleep in Home dashboard, use the exact cached telemetry (e.g. 11h 49m)
+            if (
+              cachedWearable?.totalSleepFormatted &&
+              (Math.abs((cachedWearable.totalMinutes || 0) - netTotalMinutes) <= 60 ||
+                cachedWearable.totalSleepMs === totalSleepMs)
+            ) {
+              finalFormatted = cachedWearable.totalSleepFormatted;
+              netH = cachedWearable.hours !== undefined ? cachedWearable.hours : netH;
+              netM = cachedWearable.minutes !== undefined ? cachedWearable.minutes : netM;
+            }
+
+            setRecordedDuration({
+              hours: netH,
+              mins: netM,
+              formatted: finalFormatted,
+            });
+
+            const totalHours = netTotalMinutes / 60;
 
             // Workload / Stress calculation
             let calculatedStress: StressLevel = 'Low';
@@ -422,7 +477,32 @@ export default function SleepLog() {
         }
       }
 
+      // Check if this date corresponds to the latest wearable telemetry in Home Dashboard
+      const isTodayOrYesterday =
+        targetDateStr === new Date().toDateString() ||
+        targetDateStr === new Date(Date.now() - 86400000).toDateString();
+
+      if (cachedWearable?.totalSleepFormatted && isTodayOrYesterday) {
+        const h =
+          cachedWearable.hours !== undefined
+            ? cachedWearable.hours
+            : Math.floor((cachedWearable.totalMinutes || 420) / 60);
+        const m =
+          cachedWearable.minutes !== undefined
+            ? cachedWearable.minutes
+            : (cachedWearable.totalMinutes || 420) % 60;
+        setRecordedDuration({
+          hours: h,
+          mins: m,
+          formatted: cachedWearable.totalSleepFormatted,
+        });
+        setHasDataForSelectedDate(true);
+        setLoadingDateData(false);
+        return;
+      }
+
       // 3. No session recorded for this date
+      setRecordedDuration(null);
       setHasDataForSelectedDate(false);
       // Set sensible defaults for logging
       const defaultStart = new Date(targetDate);
@@ -437,14 +517,19 @@ export default function SleepLog() {
       setNotes('');
     } catch (err) {
       console.warn('Error fetching date data:', err);
+      setRecordedDuration(null);
       setHasDataForSelectedDate(false);
     } finally {
       setLoadingDateData(false);
     }
   };
 
-  // Calculate Total Sleep Duration
+  // Calculate Total Sleep Duration - matches Sleep Reports net duration unless modified
   const calculateTotalSleep = () => {
+    if (!isCustomTimeModified && recordedDuration) {
+      return recordedDuration;
+    }
+
     const start = bedtime.getTime();
     let end = wakeTime.getTime();
 
@@ -485,6 +570,7 @@ export default function SleepLog() {
       setShowDatePicker(false);
     }
     if (selected) {
+      setIsCustomTimeModified(false);
       setSelectedDate(selected);
     }
   };
@@ -494,6 +580,7 @@ export default function SleepLog() {
       setShowTimePicker(false);
     }
     if (selected) {
+      setIsCustomTimeModified(true);
       if (timePickerMode === 'bedtime') {
         setBedtime(selected);
       } else {
