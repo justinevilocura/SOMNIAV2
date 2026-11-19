@@ -469,16 +469,17 @@ export default function Profile() {
       {activeTab === 'profile' ? (
         // ─── DEDICATED PROFILE VIEW ──────────────────────────────────────────
         <View key="profile-details-view">
-          <TouchableOpacity
-            onPress={() => setActiveTab('settings')}
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={22} color="#a259ff" />
-            <Text style={{ color: '#a259ff', fontSize: 15, fontWeight: '600', marginLeft: 6 }}>
-              Back to Settings
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.viewNavHeader}>
+            <TouchableOpacity
+              onPress={() => setActiveTab('settings')}
+              style={styles.backArrowBtn}
+              activeOpacity={0.7}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.viewNavTitle}>Profile Details</Text>
+          </View>
 
           <View style={styles.profileHeader}>
             {/* Interactive Avatar with Camera Edit Badge */}
@@ -508,27 +509,33 @@ export default function Profile() {
             </TouchableOpacity>
 
             <Text style={styles.profileName}>{userData.name || 'User'}</Text>
-            <Text style={styles.profileEmail}>{userData.email}</Text>
-            <Text style={{ color: '#a29bfe', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>
-              Tap camera to change photo
-            </Text>
+            <View style={styles.emailBadge}>
+              <Ionicons name="mail-outline" size={13} color="rgba(255, 255, 255, 0.55)" style={{ marginRight: 5 }} />
+              <Text style={styles.profileEmail}>{userData.email || 'No email provided'}</Text>
+            </View>
+            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.7} style={styles.changePhotoPill}>
+              <Ionicons name="camera-outline" size={12} color="#a259ff" style={{ marginRight: 4 }} />
+              <Text style={styles.changePhotoText}>Tap photo to change</Text>
+            </TouchableOpacity>
           </View>
 
           {/* ─── PERSONAL DETAILS SECTION ─── */}
           <View style={styles.personalDetailsCard}>
             <View style={styles.detailsHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="person-circle-outline" size={20} color="#a259ff" style={{ marginRight: 6 }} />
+              <View style={styles.detailsHeaderLeft}>
+                <View style={styles.sectionIconBadge}>
+                  <Ionicons name="person" size={16} color="#a259ff" />
+                </View>
                 <Text style={styles.detailsTitle}>Personal Details</Text>
               </View>
 
               {!isEditing && (
                 <TouchableOpacity
                   onPress={handleStartEdit}
-                  style={{ flexDirection: 'row', alignItems: 'center', padding: 4 }}
+                  style={styles.editPillBtn}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="create-outline" size={16} color="#a259ff" style={{ marginRight: 4 }} />
+                  <Ionicons name="create-outline" size={14} color="#c084fc" style={{ marginRight: 4 }} />
                   <Text style={styles.editActionText}>Edit</Text>
                 </TouchableOpacity>
               )}
@@ -614,10 +621,12 @@ export default function Profile() {
               </View>
             ) : (
               // ── DISPLAY MODE ──
-              <View style={{ marginTop: 4 }}>
+              <View style={styles.detailsList}>
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelContainer}>
-                    <Ionicons name="person-outline" size={17} color="#a259ff" />
+                    <View style={styles.detailRowIconBadge}>
+                      <Ionicons name="person-outline" size={15} color="#a259ff" />
+                    </View>
                     <Text style={styles.detailLabel}>Full Name</Text>
                   </View>
                   <Text style={styles.detailValue} numberOfLines={1}>
@@ -627,7 +636,9 @@ export default function Profile() {
 
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelContainer}>
-                    <Ionicons name="calendar-outline" size={17} color="#a259ff" />
+                    <View style={styles.detailRowIconBadge}>
+                      <Ionicons name="calendar-outline" size={15} color="#38bdf8" />
+                    </View>
                     <Text style={styles.detailLabel}>Age</Text>
                   </View>
                   <Text style={styles.detailValue}>
@@ -637,7 +648,9 @@ export default function Profile() {
 
                 <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
                   <View style={styles.detailLabelContainer}>
-                    <Ionicons name="transgender-outline" size={17} color="#a259ff" />
+                    <View style={styles.detailRowIconBadge}>
+                      <Ionicons name="transgender-outline" size={15} color="#f472b6" />
+                    </View>
                     <Text style={styles.detailLabel}>Gender</Text>
                   </View>
                   <Text style={styles.detailValue}>
@@ -651,26 +664,25 @@ export default function Profile() {
       ) : activeTab === 'account_privacy' ? (
         // ─── DEDICATED ACCOUNT AND PRIVACY VIEW ──────────────────────────────
         <View key="account-privacy-view">
-          <TouchableOpacity
-            onPress={() => setActiveTab('settings')}
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={22} color="#a259ff" />
-            <Text style={{ color: '#a259ff', fontSize: 15, fontWeight: '600', marginLeft: 6 }}>
-              Back to Settings
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.sectionTitle, { fontSize: 20, marginTop: 4, marginBottom: 16, textAlign: 'left' }]}>
-            Account and Privacy
-          </Text>
+          <View style={styles.viewNavHeader}>
+            <TouchableOpacity
+              onPress={() => setActiveTab('settings')}
+              style={styles.backArrowBtn}
+              activeOpacity={0.7}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.viewNavTitle}>Account and Privacy</Text>
+          </View>
 
           {/* Change Password Card */}
           <View style={styles.personalDetailsCard}>
             <View style={styles.detailsHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="key-outline" size={20} color="#a259ff" style={{ marginRight: 6 }} />
+              <View style={styles.detailsHeaderLeft}>
+                <View style={styles.sectionIconBadge}>
+                  <Ionicons name="key" size={16} color="#a259ff" />
+                </View>
                 <Text style={styles.detailsTitle}>Change Password</Text>
               </View>
             </View>
@@ -690,8 +702,12 @@ export default function Profile() {
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  <TouchableOpacity onPress={() => setShowCurrentPass(!showCurrentPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showCurrentPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+                  <TouchableOpacity
+                    onPress={() => setShowCurrentPass(!showCurrentPass)}
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name={showCurrentPass ? 'eye-off-outline' : 'eye-outline'} size={19} color="#8e8ea9" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -710,8 +726,12 @@ export default function Profile() {
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  <TouchableOpacity onPress={() => setShowNewPass(!showNewPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showNewPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+                  <TouchableOpacity
+                    onPress={() => setShowNewPass(!showNewPass)}
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name={showNewPass ? 'eye-off-outline' : 'eye-outline'} size={19} color="#8e8ea9" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -730,17 +750,21 @@ export default function Profile() {
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  <TouchableOpacity onPress={() => setShowConfirmPass(!showConfirmPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showConfirmPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPass(!showConfirmPass)}
+                    style={styles.eyeBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name={showConfirmPass ? 'eye-off-outline' : 'eye-outline'} size={19} color="#8e8ea9" />
                   </TouchableOpacity>
                 </View>
               </View>
 
               <TouchableOpacity
-                style={[styles.saveBtn, { marginTop: 8 }]}
+                style={[styles.saveBtn, { marginTop: 10 }]}
                 onPress={handleChangePassword}
                 disabled={isChangingPass}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
                 {isChangingPass ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -751,27 +775,31 @@ export default function Profile() {
             </View>
           </View>
 
-          {/* Delete Account (Danger Zone) */}
+          {/* Delete Account */}
           <View style={styles.dangerCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Ionicons name="warning-outline" size={20} color="#ff5252" style={{ marginRight: 6 }} />
-              <Text style={styles.dangerTitle}>Delete Account</Text>
+            <View style={styles.dangerRow}>
+              <View style={styles.dangerIconBadge}>
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              </View>
+              <View style={styles.dangerInfo}>
+                <Text style={styles.dangerTitle}>Delete Account</Text>
+                <Text style={styles.dangerSubtitle}>
+                  Permanently erase your account and all sleep history
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.deletePillBtn}
+                onPress={handleDeleteAccount}
+                disabled={isDeletingAccount}
+                activeOpacity={0.7}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator size="small" color="#ef4444" />
+                ) : (
+                  <Text style={styles.deletePillText}>Delete</Text>
+                )}
+              </TouchableOpacity>
             </View>
-            <Text style={styles.dangerDesc}>
-              Permanently delete your SOMNIA account and erase all sleep sessions, health data, and history. This cannot be undone.
-            </Text>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={handleDeleteAccount}
-              disabled={isDeletingAccount}
-              activeOpacity={0.8}
-            >
-              {isDeletingAccount ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.deleteBtnText}>Delete My Account</Text>
-              )}
-            </TouchableOpacity>
           </View>
         </View>
       ) : (
