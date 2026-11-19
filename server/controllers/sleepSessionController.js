@@ -1,4 +1,5 @@
 import SleepSession from '../models/sleepSessionModel.js';
+import { cleanSleepSessionBatch } from '../services/dataCleaningService.js';
 
 export const addSleepSession = async (req, res) => {
   const sleepSessions = req.body; // expecting an array of sleep session objects
@@ -8,26 +9,32 @@ export const addSleepSession = async (req, res) => {
   }
  
   try {
-    for (const session of sleepSessions) {
+    // Run raw incoming sessions through SOMNiA Data Cleaning & Anomaly Isolation Pipeline
+    const { cleanedSessions, passRate, isValid, audit } = cleanSleepSessionBatch(sleepSessions);
+
+    // If batch noise exceeds 10% (for batches >= 5), reject payload to preserve DB integrity
+    if (!isValid && sleepSessions.length >= 5) {
+      console.warn(`[DataCleaning] Sleep session batch rejected. Pass rate: ${passRate}%. Dropped:`, audit.reasons);
+      return res.status(422).json({
+        success: false,
+        message: `Biometric validation failed: Anomaly noise exceeds 10% tolerance (Pass rate: ${passRate}%).`,
+        audit
+      });
+    }
+
+    for (const session of cleanedSessions) {
       const { stages, lastModifiedTime, id, title, startTime, endTime, userId } = session;
 
-      if (
-        !Array.isArray(stages) ||
-        !lastModifiedTime ||
-        !id ||
-        !startTime ||
-        !endTime ||
-        !userId
-      ) {
-        return res.status(400).json({ success: false, message: 'Missing required details in one or more sessions' });
+      if (!id || !startTime || !endTime || !userId) {
+        continue;
       }
 
       await SleepSession.findOneAndUpdate(
         { id },
         {
           user: userId,
-          stages,
-          lastModifiedTime: new Date(lastModifiedTime),
+          stages: stages || [],
+          lastModifiedTime: new Date(lastModifiedTime || Date.now()),
           id,
           title: title || null,
           startTime: new Date(startTime),
@@ -37,7 +44,16 @@ export const addSleepSession = async (req, res) => {
       );
     }
 
-    return res.status(200).json({ success: true, message: 'Sleep Session data synced successfully' });
+    return res.status(200).json({
+      success: true,
+      message: 'Sleep Session data cleaned and synced successfully',
+      dataCleaningSummary: {
+        totalReceived: audit.totalReceived,
+        cleanSessionsSaved: cleanedSessions.length,
+        passRate: `${passRate}%`,
+        imputedCount: cleanedSessions.filter(c => c.cleaningMetadata?.imputedStages).length
+      }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

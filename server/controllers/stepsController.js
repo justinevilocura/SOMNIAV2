@@ -1,4 +1,5 @@
 import Step from "../models/stepsModel.js";
+import { cleanStepsBatch } from "../services/dataCleaningService.js";
 
 export const addStepData = async (req, res) => {
   const steps = req.body; // expecting an array of step objects
@@ -8,11 +9,20 @@ export const addStepData = async (req, res) => {
   }
  
   try {
-    for (const step of steps) {
+    const { cleanedSteps, passRate, isValid } = cleanStepsBatch(steps);
+
+    if (!isValid && steps.length >= 10) {
+      return res.status(422).json({
+        success: false,
+        message: `Step validation failed: Anomaly noise exceeds 10% tolerance (Pass rate: ${passRate}%).`
+      });
+    }
+
+    for (const step of cleanedSteps) {
       const { id, lastModifiedTime, count, startTime, endTime, userId, dataOrigin } = step;
 
-      if (!id || !lastModifiedTime || !count || !startTime || !endTime || !userId) {
-        return res.status(400).json({ success: false, message: 'Missing required details in one or more steps' });
+      if (!id || !lastModifiedTime || count === undefined || !startTime || !endTime || !userId) {
+        continue;
       }
 
       await Step.findOneAndUpdate(
@@ -30,7 +40,15 @@ export const addStepData = async (req, res) => {
       );
     }
 
-    return res.status(200).json({ success: true, message: "Step data synced successfully" });
+    return res.status(200).json({
+      success: true,
+      message: "Step data cleaned and synced successfully",
+      dataCleaningSummary: {
+        totalReceived: steps.length,
+        cleanStepsSaved: cleanedSteps.length,
+        passRate: `${passRate}%`
+      }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

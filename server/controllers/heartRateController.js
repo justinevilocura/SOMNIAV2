@@ -1,15 +1,27 @@
 import mongoose from 'mongoose';
 import HeartRate from '../models/heartRateModel.js';
+import { cleanHeartRateBatch } from '../services/dataCleaningService.js';
 
 export const addHeartRate = async (req, res) => {
   const records = req.body; // assuming array of heart rate records
 
   try {
-    for (const record of records) {
+    const { cleanedRecords, passRate, isValid, audit } = cleanHeartRateBatch(records);
+
+    if (!isValid && audit.totalSamplesReceived >= 20) {
+      console.warn(`[DataCleaning] Heart rate batch rejected. Pass rate: ${passRate}%`);
+      return res.status(422).json({
+        success: false,
+        message: `Biometric validation failed: Noise artifacts exceed 10% tolerance (Pass rate: ${passRate}%).`,
+        audit
+      });
+    }
+
+    for (const record of cleanedRecords) {
       const { id, lastModifiedTime, startTime, endTime, samples, userId } = record;
 
-      if (!id || !lastModifiedTime || !startTime || !endTime || !samples || !userId) {
-        return res.status(400).json({ success: false, message: 'Missing required details' });
+      if (!id || !startTime || !endTime || !samples || !userId) {
+        continue;
       }
 
       // Upsert: update if exists, else create
@@ -20,7 +32,15 @@ export const addHeartRate = async (req, res) => {
       );
     }
 
-    return res.status(200).json({ success: true, message: 'Heart rate data synced successfully' });
+    return res.status(200).json({
+      success: true,
+      message: 'Heart rate data cleaned and synced successfully',
+      dataCleaningSummary: {
+        totalSamplesReceived: audit.totalSamplesReceived,
+        cleanSamplesSaved: audit.validSamplesCount,
+        passRate: `${passRate}%`
+      }
+    });
 
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

@@ -13,6 +13,7 @@ import sleepSessionRouter from "./routes/sleepSessionRoutes.js";
 import spo2Router from "./routes/spo2Routes.js";
 import aiRouter from "./routes/aiRoutes.js";
 import exerciseRouter from "./routes/exerciseRoutes.js";
+import dataCleaningRouter from "./routes/dataCleaningRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 4000
@@ -67,6 +68,7 @@ app.use('/api/sleepSession', sleepSessionRouter);
 app.use('/api/spo2', spo2Router);
 app.use('/api/ai', aiRouter);
 app.use('/api/exercise', exerciseRouter);
+app.use('/api/dataCleaning', dataCleaningRouter);
 
 // Global Error Handler to catch middleware errors (like PayloadTooLargeError from express.json)
 app.use((err, req, res, next) => {

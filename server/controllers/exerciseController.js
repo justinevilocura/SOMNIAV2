@@ -1,29 +1,46 @@
 import ExerciseSession from '../models/exerciseModel.js';
+import { cleanExerciseBatch } from '../services/dataCleaningService.js';
 
 export const addExerciseSession = async (req, res) => {
-    const { exerciseType, lastModifiedTime, id, title, startTime, endTime } = req.body;
+    const raw = req.body;
     const userId = req.user?.id || req.body?.userId;
 
-    if (exerciseType === undefined || !lastModifiedTime || !id || !startTime || !endTime || !userId) {
+    if (!raw.id || !raw.startTime || !raw.endTime || !userId) {
         return res.status(400).json({ success: false, message: 'Missing required details' });
     }
 
     try {
+        const { cleanedExercises, isValid, audit } = cleanExerciseBatch([{ ...raw, userId }]);
+
+        if (!isValid || cleanedExercises.length === 0) {
+            return res.status(422).json({
+                success: false,
+                message: 'Exercise session rejected: Artifact or physiological boundary violation.',
+                audit
+            });
+        }
+
+        const cleaned = cleanedExercises[0];
+
         await ExerciseSession.findOneAndUpdate(
-            { id },
+            { id: cleaned.id },
             {
                 user: userId,
-                exerciseType,
-                lastModifiedTime: new Date(lastModifiedTime),
-                id,
-                title: title || null,
-                startTime: new Date(startTime),
-                endTime: new Date(endTime)
+                exerciseType: cleaned.exerciseType,
+                lastModifiedTime: new Date(cleaned.lastModifiedTime),
+                id: cleaned.id,
+                title: cleaned.title,
+                startTime: new Date(cleaned.startTime),
+                endTime: new Date(cleaned.endTime)
             },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
-        return res.status(201).json({ success: true, message: "Exercise session added successfully" });
+        return res.status(201).json({
+            success: true,
+            message: "Exercise session cleaned and added successfully",
+            exercise: cleaned
+        });
 
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -39,17 +56,22 @@ export const bulkAddExerciseSessions = async (req, res) => {
     }
 
     try {
+        const recordsWithUser = exerciseRecords.map(r => ({ ...r, userId: r.userId || userId }));
+        const { cleanedExercises, passRate, isValid, audit } = cleanExerciseBatch(recordsWithUser);
+
+        if (!isValid && exerciseRecords.length >= 5) {
+            console.warn(`[DataCleaning] Exercise batch rejected. Pass rate: ${passRate}%. Dropped:`, audit.reasons);
+            return res.status(422).json({
+                success: false,
+                message: `Biometric validation failed: Anomaly noise exceeds 10% tolerance (Pass rate: ${passRate}%).`,
+                audit
+            });
+        }
+
         let insertedCount = 0;
-        const skippedRecords = [];
 
-        for (const record of exerciseRecords) {
-            const { exerciseType, lastModifiedTime, id, title, startTime, endTime, userId: recordUserId } = record;
-            const targetUserId = recordUserId || userId;
-
-            if (exerciseType === undefined || !lastModifiedTime || !id || !startTime || !endTime || !targetUserId) {
-                skippedRecords.push({ id: id || 'unknown', reason: 'Missing required fields' });
-                continue;
-            }
+        for (const record of cleanedExercises) {
+            const { exerciseType, lastModifiedTime, id, title, startTime, endTime, userId: targetUserId } = record;
 
             await ExerciseSession.findOneAndUpdate(
                 { id },
@@ -68,13 +90,14 @@ export const bulkAddExerciseSessions = async (req, res) => {
             insertedCount++;
         }
 
-        return res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: `Bulk operation completed`,
-            data: {
-                inserted: insertedCount,
-                skipped: skippedRecords.length,
-                skippedRecords: skippedRecords
+            message: 'Exercise records cleaned and synced successfully',
+            dataCleaningSummary: {
+                totalReceived: audit.totalReceived,
+                cleanWorkoutsSaved: insertedCount,
+                passRate: `${passRate}%`,
+                droppedCount: audit.droppedCount
             }
         });
 
