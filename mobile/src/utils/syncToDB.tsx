@@ -1,23 +1,29 @@
+// Cross-platform syncToDB (supports Apple HealthKit mapped payloads and Health Connect)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://192.0.0.3:4000';
+const backendUrl =
+    process.env.EXPO_PUBLIC_BACKEND_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    'https://somniav2-production.up.railway.app';
 
 const handleResponse = async (response: Response, dataType: string) => {
-    const text = await response.text();
     if (!response.ok) {
-        let errorMessage = response.statusText;
+        const text = await response.text();
+        let errorData;
         try {
-            const errorData = JSON.parse(text);
-            errorMessage = errorData.message || errorMessage;
-        } catch (_) {
-            errorMessage = text.substring(0, 200) || errorMessage;
+            errorData = JSON.parse(text);
+        } catch (e) {
+            console.error(`Raw HTML response for ${dataType}:`, text.substring(0, 500));
+            throw new Error(`Failed to sync ${dataType} data: Server returned HTML instead of JSON. Status: ${response.status}`);
         }
-        throw new Error(`Failed to sync ${dataType} data (${response.status}): ${errorMessage}`);
+        throw new Error(`Failed to sync ${dataType} data: ${errorData.message || response.statusText}`);
     }
+    const text = await response.text();
     try {
         return JSON.parse(text);
     } catch (e) {
-        throw new Error(`Failed to parse response for ${dataType}: ${text.substring(0, 200)}`);
+        console.error(`Raw HTML success response for ${dataType}:`, text.substring(0, 500));
+        throw new Error(`Failed to parse success response for ${dataType}. Status: ${response.status}`);
     }
 };
 
@@ -39,8 +45,8 @@ export const syncToDB = async (
     heartRate: any[],
     sleepSession: any[],
     steps: any[],
-    userID: string,
-    sessionAvgBpm?: number
+    exerciseSession: any[],
+    userID: string
 ) => {
     try {
         const token = await getAuthToken();
@@ -50,36 +56,32 @@ export const syncToDB = async (
         };
 
         // Heart Rate
-        const records = heartRate.map((record) => ({
+        const heartRatePayload = (heartRate || []).map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || String(Date.now()),
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
-            samples: record.samples.map((s: any) => ({
-                beatsPerMinute: s.beatsPerMinute,
+            samples: (record.samples || []).map((s) => ({
+                beatsPerMinute: s.beatsPerMinute || 0,
                 time: s.time,
             })),
         }));
 
-        const heartRatePayload = {
-            userId: userID,
-            sessionAvgBpm: sessionAvgBpm || null,
-            records,
-        };
-
-        const heartRateResponse = await fetch(`${backendUrl}/api/heartRate/addHeartRate`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(heartRatePayload),
-        });
-        await handleResponse(heartRateResponse, "heart rate");
+        if (heartRatePayload.length > 0) {
+            const heartRateResponse = await fetch(`${backendUrl}/api/heartRate/addHeartRate`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(heartRatePayload),
+            });
+            await handleResponse(heartRateResponse, "heart rate");
+        }
 
         // Sleep Session
-        const sleepPayload = sleepSession.map((record) => ({
+        const sleepPayload = (sleepSession || []).map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || String(Date.now()),
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
             title: record.title || null,
@@ -90,29 +92,54 @@ export const syncToDB = async (
             })),
         }));
 
-        const sleepResponse = await fetch(`${backendUrl}/api/sleepSession/addSleepSession`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(sleepPayload),
-        });
-        await handleResponse(sleepResponse, "sleep session");
+        if (sleepPayload.length > 0) {
+            const sleepResponse = await fetch(`${backendUrl}/api/sleepSession/addSleepSession`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(sleepPayload),
+            });
+            await handleResponse(sleepResponse, "sleep session");
+        }
 
         // Steps
-        const stepsPayload = steps.map((record) => ({
+        const stepsPayload = (steps || []).map((record) => ({
             userId: userID,
-            id: record.metadata.id,
-            lastModifiedTime: record.metadata.lastModifiedTime,
+            id: record.metadata?.id || `step-${userID}-${record.startTime}-${record.endTime}`,
+            lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
             startTime: record.startTime,
             endTime: record.endTime,
-            count: record.count,
+            count: record.count || 0,
+            dataOrigin: record.metadata?.dataOrigin || "unknown",
         }));
 
-        const stepsResponse = await fetch(`${backendUrl}/api/step/addStep`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(stepsPayload),
-        });
-        await handleResponse(stepsResponse, "steps");
+        if (stepsPayload.length > 0) {
+            const stepsResponse = await fetch(`${backendUrl}/api/step/addStep`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(stepsPayload),
+            });
+            await handleResponse(stepsResponse, "steps");
+        }
+
+        // Exercise Session
+        if (exerciseSession && exerciseSession.length > 0) {
+            const exercisePayload = exerciseSession.map((record) => ({
+                userId: userID,
+                id: record.metadata?.id || `exercise-${userID}-${record.startTime}-${record.endTime}`,
+                lastModifiedTime: record.metadata?.lastModifiedTime || new Date().toISOString(),
+                startTime: record.startTime,
+                endTime: record.endTime,
+                title: record.title || null,
+                exerciseType: record.exerciseType || 0,
+            }));
+
+            const exerciseResponse = await fetch(`${backendUrl}/api/exercise/bulkAddExercise`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ exerciseRecords: exercisePayload }),
+            });
+            await handleResponse(exerciseResponse, "exercise session");
+        }
 
         console.log("Health data synced successfully.");
     } catch (error) {

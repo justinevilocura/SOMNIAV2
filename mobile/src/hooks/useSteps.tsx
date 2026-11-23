@@ -3,6 +3,7 @@ import AppleHealthKit, { HealthInputOptions } from 'react-native-health';
 
 export const useSteps = (date: Date) => {
   const startDate = new Date(date);
+  startDate.setDate(startDate.getDate() - 7); // Look back 7 days so today and recent steps are both available
   startDate.setHours(0, 0, 0, 0);
 
   const endDate = new Date(date);

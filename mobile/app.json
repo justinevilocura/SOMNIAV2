@@ -19,8 +19,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.belleza.mobile",
+      "bundleIdentifier": "com.somnia.unabia",
       "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "somnia",
+              "com.somnia.unabia",
+              "com.googleusercontent.apps.1087911574541-2d7d9rhuvrmekirapltq6ku7kmlccfpv"
+            ]
+          }
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }

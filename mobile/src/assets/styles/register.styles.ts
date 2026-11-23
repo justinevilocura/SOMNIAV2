@@ -166,7 +166,8 @@ const styles = StyleSheet.create({
   },
   socialRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    width: '100%',
     marginBottom: 10,
   },
   socialBtnFull: {
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 0,
     justifyContent: 'center',
-    width: '48%',
+    width: '100%',
   },
   socialIconFull: {
     width: 22,
