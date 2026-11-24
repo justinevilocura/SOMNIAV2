@@ -1,4 +1,5 @@
 import userModel from "../models/userModel.js";
+import bcrypt from "bcryptjs";
 
 export const getUserData = async (req,res)=>{
     try {
@@ -58,18 +59,19 @@ export const updateAvatar = async (req, res) => {
 
 export const changePassword = async (req, res) => {
     try {
-        const userId = req.body.userId;
+        const userId = req.body.userId || req.user?.id;
         const { currentPassword, newPassword } = req.body;
 
-        if (!userId || !currentPassword || !newPassword) {
-            return res.json({ success: false, message: 'All fields are required' });
+        if (!userId) {
+            return res.json({ success: false, message: 'User ID is required' });
         }
-
+        if (!currentPassword || !newPassword) {
+            return res.json({ success: false, message: 'Current and new password are required' });
+        }
         if (newPassword.length < 6) {
             return res.json({ success: false, message: 'New password must be at least 6 characters' });
         }
 
-        const bcrypt = (await import('bcryptjs')).default;
         const user = await userModel.findById(userId);
         if (!user) {
             return res.json({ success: false, message: 'User not found' });
@@ -77,13 +79,14 @@ export const changePassword = async (req, res) => {
 
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch) {
-            return res.json({ success: false, message: 'Current password is incorrect' });
+            return res.json({ success: false, message: 'Incorrect current password' });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await userModel.findByIdAndUpdate(userId, { password: hashedPassword });
+        user.password = hashedPassword;
+        await user.save();
 
-        res.json({ success: true, message: 'Password updated successfully' });
+        res.json({ success: true, message: 'Password changed successfully' });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
@@ -91,19 +94,17 @@ export const changePassword = async (req, res) => {
 
 export const deleteAccount = async (req, res) => {
     try {
-        const userId = req.body.userId;
-
+        const userId = req.body.userId || req.user?.id;
         if (!userId) {
             return res.json({ success: false, message: 'User ID is required' });
         }
 
-        // Delete the user and all their associated data
-        const user = await userModel.findByIdAndDelete(userId);
-        if (!user) {
+        const deleted = await userModel.findByIdAndDelete(userId);
+        if (!deleted) {
             return res.json({ success: false, message: 'User not found' });
         }
 
-        // Clean up all related data collections
+        // Best-effort cleanup of related data
         try {
             const SleepSession = (await import('../models/sleepSessionModel.js')).default;
             const HeartRate = (await import('../models/heartRateModel.js')).default;
@@ -119,7 +120,7 @@ export const deleteAccount = async (req, res) => {
             console.warn('Partial cleanup error:', cleanupErr.message);
         }
 
-        res.json({ success: true, message: 'Account and all data deleted successfully' });
+        res.json({ success: true, message: 'Account deleted successfully' });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
