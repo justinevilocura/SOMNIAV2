@@ -434,9 +434,11 @@ export default function Profile() {
         } else {
           Alert.alert('Error', json.message || 'Could not change password.');
         }
-      } else {
-        // Non-JSON response (e.g. 401 from expired token or server error)
+      } else if (res.status === 401) {
         Alert.alert('Session Expired', 'Please log out and log in again, then try changing your password.');
+      } else {
+        // Server returned non-JSON (404, 500, HTML error page, etc.)
+        Alert.alert('Error', `Server error (${res.status}). Please try again later.`);
       }
     } catch (e: any) {
       Alert.alert('Error', 'Failed to update password. Please check your network connection.');

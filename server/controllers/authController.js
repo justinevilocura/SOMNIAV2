@@ -11,7 +11,7 @@ export const register = async (req, res) => {
     }
 
     // Validate gender value
-    const allowedGenders = ["Male", "Female", "Prefer not to say"];
+    const allowedGenders = ["Male", "Female", "Prefer not to say", "Other"];
     if (!allowedGenders.includes(gender)) {
         return res.status(400).json({
             success: false,
