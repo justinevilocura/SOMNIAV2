@@ -17,6 +17,7 @@ export const getUserData = async (req,res)=>{
                 birthdate: user.birthdate,  
                 isAccountVerified : user.isAccountVerified,
                 gender: user.gender,
+                age: user.age || '',
                 avatar: user.avatar || '',
             }
         });
@@ -49,6 +50,44 @@ export const updateAvatar = async (req, res) => {
             success: true,
             message: 'Avatar updated successfully',
             avatar: updatedUser.avatar,
+        });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const updateProfile = async (req, res) => {
+    try {
+        const userId = req.body.userId;
+        const { name, age, gender } = req.body;
+
+        if (!userId) {
+            return res.json({ success: false, message: 'User ID is required' });
+        }
+
+        const updateData = {};
+        if (name !== undefined && name.trim()) updateData.name = name.trim();
+        if (age !== undefined) updateData.age = String(age);
+        if (gender !== undefined) updateData.gender = gender;
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            updateData,
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            userData: {
+                name: updatedUser.name,
+                age: updatedUser.age,
+                gender: updatedUser.gender,
+            }
         });
     } catch (error) {
         res.json({ success: false, message: error.message });

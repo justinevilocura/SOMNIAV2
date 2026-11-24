@@ -85,7 +85,12 @@ const Profile = () => {
     userData?.isVerified ||
     userData?.emailVerified;
 
-  const age = calculateAge(userData?.birthdate);
+  // Prefer explicitly saved age (synced from mobile), fallback to calculated from birthdate
+  const age = userData?.age
+    ? userData.age
+    : calculateAge(userData?.birthdate) !== null
+      ? String(calculateAge(userData?.birthdate))
+      : null;
   const gender = userData?.gender || 'Not set';
 
   return (
