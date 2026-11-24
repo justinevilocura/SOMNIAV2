@@ -15,7 +15,10 @@ import {
 import Sidebar from '../../components/sidebar.jsx';
 
 // Frontend-only age calculator
-const calculateAge = (birthdate) => {
+const calculateAge = (birthdate, explicitAge) => {
+  if (explicitAge !== undefined && explicitAge !== null && explicitAge !== '' && !Number.isNaN(Number(explicitAge))) {
+    return Number(explicitAge);
+  }
   if (!birthdate) return null;
 
   const birth = new Date(birthdate);
@@ -29,7 +32,7 @@ const calculateAge = (birthdate) => {
     age--;
   }
 
-  return age;
+  return Math.max(0, age);
 };
 
 const Profile = () => {
@@ -38,22 +41,16 @@ const Profile = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editForm, setEditForm] = useState({
-    birthdate: '',
+    age: '',
     gender: 'Prefer not to say',
   });
   const fileInputRef = useRef(null);
 
+  const currentAge = calculateAge(userData?.birthdate, userData?.age);
+
   const openEditModal = () => {
-    let dateStr = '';
-    if (userData?.birthdate) {
-      try {
-        dateStr = new Date(userData.birthdate).toISOString().split('T')[0];
-      } catch (e) {
-        dateStr = '';
-      }
-    }
     setEditForm({
-      birthdate: dateStr,
+      age: currentAge !== null ? String(currentAge) : '',
       gender: userData?.gender || 'Prefer not to say',
     });
     setIsEditModalOpen(true);
@@ -61,8 +58,8 @@ const Profile = () => {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-    if (!editForm.birthdate) {
-      toast.error('Please select your birthdate');
+    if (editForm.age === '' || Number(editForm.age) < 0 || Number(editForm.age) > 130) {
+      toast.error('Please enter a valid age (0-130)');
       return;
     }
 
@@ -72,7 +69,7 @@ const Profile = () => {
       const { data } = await axios.post(
         `${backendUrl}/api/user/update-profile`,
         {
-          birthdate: editForm.birthdate,
+          age: Number(editForm.age),
           gender: editForm.gender,
         },
         {
@@ -238,7 +235,7 @@ const Profile = () => {
     userData?.isVerified ||
     userData?.emailVerified;
 
-  const age = calculateAge(userData?.birthdate);
+  const age = calculateAge(userData?.birthdate, userData?.age);
   const gender = userData?.gender || 'Not set';
 
   return (
@@ -409,14 +406,17 @@ const Profile = () => {
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
                 <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-1.5">
-                  Birthdate (Calculates your Age)
+                  Age (years)
                 </label>
                 <input
-                  type="date"
-                  name="birthdate"
-                  value={editForm.birthdate}
+                  type="number"
+                  name="age"
+                  min="0"
+                  max="130"
+                  placeholder="e.g. 24"
+                  value={editForm.age}
                   onChange={(e) =>
-                    setEditForm((prev) => ({ ...prev, birthdate: e.target.value }))
+                    setEditForm((prev) => ({ ...prev, age: e.target.value }))
                   }
                   required
                   className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
