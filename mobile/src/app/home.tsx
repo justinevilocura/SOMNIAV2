@@ -337,6 +337,12 @@ export default function Home() {
           awakeMs,
           wakeUpCount,
         });
+
+        // Cache for Sleep Recommendations
+        try {
+          AsyncStorage.setItem('homeSleepFormatted', totalSleepFormatted);
+          AsyncStorage.setItem('homeSleepEfficiency', calculatedEfficiency.toString());
+        } catch (_) {}
       }
     } else {
       setTotalSleepHours('0 hours and 0 minutes');
@@ -806,7 +812,14 @@ export default function Home() {
           </>
         )}
 
-        {selectedTab === 'recommendations' && <SleepReco key={`tips-${refreshKey}`} />}
+        {selectedTab === 'recommendations' && (
+          <SleepReco
+            key={`tips-${refreshKey}`}
+            latestSleepFormatted={totalSleepHours}
+            latestSleepMs={sleepStageBreakdown.totalSleepMs}
+            efficiency={sleepStageBreakdown.efficiency}
+          />
+        )}
         {selectedTab === 'diary' && <Diary key={`diary-${refreshKey}`} />}
         {selectedTab === 'profile' && <Profile key={`profile-${refreshKey}`} />}
       </ScrollView>
