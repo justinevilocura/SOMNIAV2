@@ -7,8 +7,11 @@ import { motion } from 'framer-motion';
 import {
   LockClosedIcon,
   EnvelopeIcon,
+  ArrowLeftIcon,
 } from '@heroicons/react/24/outline';
 import logo from '../assets/SOMNiA_LOGO.png';
+import GoogleButton from '../components/GoogleButton';
+import { triggerGoogleAuth } from '../utils/googleAuth';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -20,6 +23,7 @@ const Login = () => {
     }
   }, [isLoggedin, navigate]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -104,7 +108,16 @@ const Login = () => {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full mx-4 relative z-10"
       >
-        <div className="bg-gray-900/40 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-800/50 p-6">
+        <div className="bg-gray-900/40 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-800/50 p-6 relative">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            aria-label="Go back"
+            className="absolute top-4 left-4 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-colors cursor-pointer"
+          >
+            <ArrowLeftIcon className="w-5 h-5" />
+          </button>
+
           {/* Logo and Title */}
           <div className="text-center mb-6">
             <motion.img
@@ -201,7 +214,7 @@ const Login = () => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isGoogleLoading}
               className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 shadow-xl shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm"
             >
               {isLoading ? (
@@ -213,6 +226,27 @@ const Login = () => {
                 <span>Sign In</span>
               )}
             </button>
+
+            <div className="relative flex items-center my-2">
+              <div className="flex-grow border-t border-gray-700/50" />
+              <span className="mx-3 text-xs text-gray-400">or</span>
+              <div className="flex-grow border-t border-gray-700/50" />
+            </div>
+
+            <GoogleButton
+              label="Sign in with Google"
+              isLoading={isGoogleLoading}
+              disabled={isLoading}
+              onClick={() =>
+                triggerGoogleAuth({
+                  backendUrl,
+                  checkAuthAndGetUserData,
+                  navigate,
+                  setIsGoogleLoading,
+                  successMessage: 'Login successful!',
+                })
+              }
+            />
 
             <div className="text-center">
               <p className="text-gray-400 text-sm">

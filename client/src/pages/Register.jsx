@@ -12,12 +12,15 @@ import {
   EnvelopeIcon,
   LockClosedIcon,
   ClipboardDocumentCheckIcon,
+  ArrowLeftIcon,
 } from "@heroicons/react/24/outline";
+import GoogleButton from "../components/GoogleButton";
+import { triggerGoogleAuth } from "../utils/googleAuth";
 
 
 const Register = () => {
   const navigate = useNavigate();
-  const { backendUrl, isLoggedin } = useContext(AppContext);
+  const { backendUrl, checkAuthAndGetUserData, isLoggedin } = useContext(AppContext);
 
   React.useEffect(() => {
     if (isLoggedin) {
@@ -25,6 +28,7 @@ const Register = () => {
     }
   }, [isLoggedin, navigate]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -118,7 +122,16 @@ const Register = () => {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full mx-4 relative z-10"
       >
-        <div className="bg-gray-900/40 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-800/50 p-5 sm:p-7">
+        <div className="bg-gray-900/40 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-800/50 p-5 sm:p-7 relative">
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            aria-label="Go back"
+            className="absolute top-4 left-4 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-colors cursor-pointer"
+          >
+            <ArrowLeftIcon className="w-5 h-5" />
+          </button>
+
           {/* Logo and Title */}
           <div className="text-center mb-4 sm:mb-5">
             <motion.img
@@ -146,6 +159,33 @@ const Register = () => {
               Join SOMNiA&apos;s medical sleep analysis platform
             </motion.p>
           </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="mb-4"
+          >
+            <GoogleButton
+              label="Sign up with Google"
+              isLoading={isGoogleLoading}
+              disabled={isLoading}
+              onClick={() =>
+                triggerGoogleAuth({
+                  backendUrl,
+                  checkAuthAndGetUserData,
+                  navigate,
+                  setIsGoogleLoading,
+                  successMessage: "Account created with Google!",
+                })
+              }
+            />
+            <div className="relative flex items-center mt-4">
+              <div className="flex-grow border-t border-gray-700/50" />
+              <span className="mx-3 text-xs text-gray-400">or sign up with email</span>
+              <div className="flex-grow border-t border-gray-700/50" />
+            </div>
+          </motion.div>
 
           {/* Registration Form */}
           <motion.form
@@ -296,7 +336,7 @@ const Register = () => {
             {/* Submit */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isGoogleLoading}
               className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-lg font-medium hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 shadow-xl shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-sm"
             >
               {isLoading ? (
