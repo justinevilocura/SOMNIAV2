@@ -8,6 +8,20 @@ import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import styles from '../assets/styles/profile.styles';
 
+// ─── Age calculation from birthdate (matches Android & web logic) ─────────────
+const calculateAge = (birthdate: any): string => {
+  if (!birthdate) return '';
+  const birth = new Date(birthdate);
+  if (isNaN(birth.getTime())) return '';
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age > 0 ? String(age) : '';
+};
+
 export default function Profile() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'settings' | 'profile' | 'account_privacy'>('settings');
@@ -86,8 +100,11 @@ export default function Profile() {
         cachedName = authData.name || '';
         cachedEmail = authData.email || '';
         cachedAvatar = authData.avatar || '';
-        cachedAge = authData.age || '';
         cachedGender = authData.gender || '';
+
+        // If age is missing but birthdate is stored, derive it now
+        const cachedBirthdate = authData.birthdate || authData.birthday || '';
+        cachedAge = authData.age || calculateAge(cachedBirthdate) || '';
 
         setUserData({
           name: cachedName || 'User',
@@ -112,9 +129,13 @@ export default function Profile() {
             // If user customized their profile locally, DO NOT overwrite with stale server data!
             const finalName = (isCustomized === 'true' && cachedName) ? cachedName : (json.userData.name || 'User');
             const finalEmail = (isCustomized === 'true' && cachedEmail) ? cachedEmail : (json.userData.email || '');
-            const finalAge = (isCustomized === 'true' && cachedAge) ? cachedAge : (json.userData.age ? String(json.userData.age) : '');
             const finalGender = (isCustomized === 'true' && cachedGender) ? cachedGender : (json.userData.gender || '');
             const finalAvatar = json.userData.avatar || cachedAvatar || '';
+
+            // Derive age: prefer explicitly stored age, then calculate from birthdate
+            const serverBirthdate = json.userData.birthdate || '';
+            const serverAge = json.userData.age ? String(json.userData.age) : calculateAge(serverBirthdate);
+            const finalAge = (isCustomized === 'true' && cachedAge) ? cachedAge : (serverAge || cachedAge || '');
 
             setUserData({
               name: finalName,
@@ -132,6 +153,8 @@ export default function Profile() {
               parsed.avatar = finalAvatar;
               parsed.age = finalAge;
               parsed.gender = finalGender;
+              // Preserve birthdate in cache for future age recalculation
+              if (serverBirthdate) parsed.birthdate = serverBirthdate;
               await AsyncStorage.setItem('authData', JSON.stringify(parsed));
             }
           }

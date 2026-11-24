@@ -51,7 +51,7 @@ export default function Home() {
   const [latestHeartRate, setLatestHeartRate] = useState(0);
   const [totalSleepHours, setTotalSleepHours] = useState('0 hours and 0 minutes');
   const [totalSteps, setTotalSteps] = useState(0);
-  const [lastSyncTimeStr, setLastSyncTimeStr] = useState('Just now');
+  const [lastSyncTimeStr, setLastSyncTimeStr] = useState('Never synced');
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
   const [selectedTab, setSelectedTab] = useState('home');
   const params = useLocalSearchParams();
@@ -76,7 +76,7 @@ export default function Home() {
   const [showSleepModal, setShowSleepModal] = useState(false);
 
   // ─── HealthKit Permissions & Data Fetching ──────────────────────────────────
-  const fetchHealthData = async (shouldSync = false) => {
+  const fetchHealthData = async (shouldSync = false, silent = false) => {
     let currentUserId = userData.user_id;
     const authDataString = await AsyncStorage.getItem('authData');
     if (authDataString) {
@@ -338,10 +338,12 @@ export default function Home() {
           wakeUpCount,
         });
 
-        // Cache for Sleep Recommendations
+        // Cache for Sleep Recommendations & Notifications
         try {
           AsyncStorage.setItem('homeSleepFormatted', totalSleepFormatted);
           AsyncStorage.setItem('homeSleepEfficiency', calculatedEfficiency.toString());
+          AsyncStorage.setItem('homeWakeTimeStr', formatTime(latestEnd));
+          AsyncStorage.setItem('homeBedtimeStr', formatTime(earliestStart));
         } catch (_) {}
       }
     } else {
@@ -402,15 +404,17 @@ export default function Home() {
     // Cloud Sync
     if (shouldSync && currentUserId) {
       try {
-        Toast.show({ type: 'info', text1: 'Syncing to Cloud...', text2: 'Please wait' });
+        if (!silent) Toast.show({ type: 'info', text1: 'Syncing to Cloud...', text2: 'Please wait' });
         await syncToDB(heartRate, sleep, selectedSteps, exerciseSession, currentUserId);
         const now = Date.now();
         setLastSyncTimestamp(now);
         setLastSyncTimeStr('Just now');
-        Toast.show({ type: 'success', text1: 'Synced to Web', text2: 'Health data saved to cloud!' });
+        // Persist so the banner survives app restarts
+        await AsyncStorage.setItem('somnia_last_sync_ts', String(now));
+        if (!silent) Toast.show({ type: 'success', text1: 'Synced to Web', text2: 'Health data saved to cloud!' });
       } catch (error: any) {
         console.error('syncToDB error:', error);
-        Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message || 'Could not sync' });
+        if (!silent) Toast.show({ type: 'error', text1: 'Sync Failed', text2: error.message || 'Could not sync' });
       }
     }
   };
@@ -433,6 +437,22 @@ export default function Home() {
           avatar: authData.avatar || '',
         });
       }
+
+      // Restore last sync timestamp so the "X ago" banner is live across restarts
+      const savedTs = await AsyncStorage.getItem('somnia_last_sync_ts');
+      if (savedTs) {
+        const ts = parseInt(savedTs, 10);
+        if (!isNaN(ts)) {
+          setLastSyncTimestamp(ts);
+          // formatAgo inline so the initial label is correct before the useEffect fires
+          const diff = Math.floor((Date.now() - ts) / 1000);
+          if (diff < 60) setLastSyncTimeStr('Just now');
+          else if (diff < 3600) setLastSyncTimeStr(`${Math.floor(diff / 60)} min ago`);
+          else if (diff < 86400) setLastSyncTimeStr(`${Math.floor(diff / 3600)}h ago`);
+          else setLastSyncTimeStr(`${Math.floor(diff / 86400)}d ago`);
+        }
+      }
+
       setTimeout(async () => {
         try {
           await fetchHealthData(false);
@@ -450,8 +470,9 @@ export default function Home() {
     const formatAgo = () => {
       const diff = Math.floor((Date.now() - lastSyncTimestamp) / 1000);
       if (diff < 60) return 'Just now';
-      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-      return `${Math.floor(diff / 3600)}h ago`;
+      if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      return `${Math.floor(diff / 86400)}d ago`;
     };
     setLastSyncTimeStr(formatAgo());
     const interval = setInterval(() => setLastSyncTimeStr(formatAgo()), 60000);
@@ -462,7 +483,8 @@ export default function Home() {
     setRefreshing(true);
     setRefreshKey((prev) => prev + 1);
     try {
-      await fetchHealthData(false);
+      // Silent: fetch latest HealthKit data + sync to cloud, no toasts shown
+      await fetchHealthData(true, true);
     } catch (e) {
       console.warn('Pull-to-refresh error:', e);
     } finally {
@@ -587,7 +609,7 @@ export default function Home() {
               borderColor: 'rgba(162, 89, 255, 0.2)',
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981', marginRight: 8 }} />
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: lastSyncTimestamp ? '#10b981' : '#6b7280', marginRight: 8 }} />
                 <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '700' }}>
                   Synced to Web • <Text style={{ color: '#94a3b8', fontWeight: '500' }}>{lastSyncTimeStr}</Text>
                 </Text>

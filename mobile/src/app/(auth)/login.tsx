@@ -84,6 +84,7 @@ export default function Login() {
                 let userAvatar = avatar || '';
                 let userAge = age ? String(age) : '';
                 let userGender = gender || '';
+                let userBirthdate = '';
 
                 try {
                     const userRes = await fetch(`${backendUrl}/api/user/data`, {
@@ -93,8 +94,21 @@ export default function Login() {
                     if (userJson.success && userJson.userData) {
                         realName = userJson.userData.name || realName;
                         userAvatar = userJson.userData.avatar || userAvatar;
-                        userAge = userJson.userData.age ? String(userJson.userData.age) : userAge;
                         userGender = userJson.userData.gender || userGender;
+                        userBirthdate = userJson.userData.birthdate || '';
+                        const serverAge = userJson.userData.age ? String(userJson.userData.age) : '';
+                        if (serverAge) {
+                            userAge = serverAge;
+                        } else if (!userAge && userBirthdate) {
+                            const birth = new Date(userBirthdate);
+                            if (!isNaN(birth.getTime())) {
+                                const today = new Date();
+                                let calcAge = today.getFullYear() - birth.getFullYear();
+                                const mDiff = today.getMonth() - birth.getMonth();
+                                if (mDiff < 0 || (mDiff === 0 && today.getDate() < birth.getDate())) calcAge--;
+                                if (calcAge > 0) userAge = String(calcAge);
+                            }
+                        }
                     }
                 } catch (_) {}
 
@@ -107,6 +121,7 @@ export default function Login() {
                     avatar: userAvatar,
                     age: userAge,
                     gender: userGender,
+                    birthdate: userBirthdate,
                 }));
 
                 Toast.show({ type: 'success', text1: 'Welcome!', text2: 'Signed in with Google.' });
@@ -177,6 +192,7 @@ export default function Login() {
                     let userAvatar = response.data.avatar || '';
                     let userAge = response.data.age ? String(response.data.age) : '';
                     let userGender = response.data.gender || '';
+                    let userBirthdate = '';
 
                     try {
                         const userRes = await fetch(`${backendUrl}/api/user/data`, {
@@ -186,8 +202,24 @@ export default function Login() {
                         if (userJson.success && userJson.userData) {
                             realName = userJson.userData.name || realName;
                             userAvatar = userJson.userData.avatar || userAvatar;
-                            userAge = userJson.userData.age ? String(userJson.userData.age) : userAge;
                             userGender = userJson.userData.gender || userGender;
+                            // Capture birthdate from server
+                            userBirthdate = userJson.userData.birthdate || '';
+                            // Prefer explicit age; fall back to calculating from birthdate
+                            const serverAge = userJson.userData.age ? String(userJson.userData.age) : '';
+                            if (serverAge) {
+                                userAge = serverAge;
+                            } else if (!userAge && userBirthdate) {
+                                // Calculate age from birthdate (same logic as Android/web)
+                                const birth = new Date(userBirthdate);
+                                if (!isNaN(birth.getTime())) {
+                                    const today = new Date();
+                                    let calcAge = today.getFullYear() - birth.getFullYear();
+                                    const mDiff = today.getMonth() - birth.getMonth();
+                                    if (mDiff < 0 || (mDiff === 0 && today.getDate() < birth.getDate())) calcAge--;
+                                    if (calcAge > 0) userAge = String(calcAge);
+                                }
+                            }
                         }
                     } catch (_) {}
 
@@ -201,6 +233,7 @@ export default function Login() {
                         avatar: userAvatar,
                         age: userAge,
                         gender: userGender,
+                        birthdate: userBirthdate,
                     };
                     await AsyncStorage.setItem('authData', JSON.stringify(authData));
 

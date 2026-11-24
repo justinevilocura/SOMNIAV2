@@ -40,16 +40,41 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
   return status === 'granted';
 };
 
-/** Cancel a stored notification by key */
+/** Cancel a stored notification by key and clean up any system duplicates */
 export const cancelNotification = async (key: string) => {
   try {
+    const fixedId = `somnia_${key}`;
+
+    // 1. Cancel by fixed identifier
+    try {
+      await Notifications.cancelScheduledNotificationAsync(fixedId);
+      await Notifications.cancelScheduledNotificationAsync(key);
+    } catch (_) {}
+
+    // 2. Cancel by stored ID in AsyncStorage
     const stored = await AsyncStorage.getItem(NOTIF_IDS_KEY);
     const ids = stored ? JSON.parse(stored) : {};
     if (ids[key]) {
-      await Notifications.cancelScheduledNotificationAsync(ids[key]);
+      try {
+        await Notifications.cancelScheduledNotificationAsync(ids[key]);
+      } catch (_) {}
       delete ids[key];
       await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(ids));
     }
+
+    // 3. Scan all currently scheduled notifications to purge any lingering duplicates
+    try {
+      const allScheduled = await Notifications.getAllScheduledNotificationsAsync();
+      for (const notif of allScheduled) {
+        if (
+          notif.identifier === fixedId ||
+          notif.identifier === key ||
+          (notif.content?.data && notif.content.data.key === key)
+        ) {
+          await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+        }
+      }
+    } catch (_) {}
   } catch (e) {
     console.error(`Failed to cancel notification [${key}]:`, e);
   }
@@ -67,7 +92,7 @@ const saveNotificationId = async (key: string, id: string) => {
   }
 };
 
-/** Schedule a recurring daily notification at hour:minute */
+/** Schedule a recurring daily notification at hour:minute with guaranteed de-duplication */
 export const scheduleDailyNotification = async (
   key: string,
   hour: number,
@@ -78,12 +103,16 @@ export const scheduleDailyNotification = async (
   await setupNotificationChannel();
   await cancelNotification(key);
 
+  const fixedId = `somnia_${key}`;
+
   const id = await Notifications.scheduleNotificationAsync({
+    identifier: fixedId,
     content: {
       title,
       body,
       sound: 'default',
       priority: Notifications.AndroidNotificationPriority.HIGH,
+      data: { key },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -97,7 +126,7 @@ export const scheduleDailyNotification = async (
   return id;
 };
 
-/** Schedule a recurring weekly notification (1=Sun, 2=Mon... 7=Sat) */
+/** Schedule a recurring weekly notification (1=Sun, 2=Mon... 7=Sat) with guaranteed de-duplication */
 export const scheduleWeeklyNotification = async (
   key: string,
   weekday: number,
@@ -109,12 +138,16 @@ export const scheduleWeeklyNotification = async (
   await setupNotificationChannel();
   await cancelNotification(key);
 
+  const fixedId = `somnia_${key}`;
+
   const id = await Notifications.scheduleNotificationAsync({
+    identifier: fixedId,
     content: {
       title,
       body,
       sound: 'default',
       priority: Notifications.AndroidNotificationPriority.HIGH,
+      data: { key },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
