@@ -47,8 +47,9 @@ export const triggerGoogleAuth = ({
             localStorage.setItem("token", data.token);
             sessionStorage.removeItem("token");
             axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
-            await checkAuthAndGetUserData();
             toast.success(successMessage);
+            // Fetch user data in background while navigating immediately
+            checkAuthAndGetUserData();
             navigate("/dashboard", { replace: true });
           } else {
             toast.error(data.message || "Google authentication failed.");

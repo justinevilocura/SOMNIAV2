@@ -9,6 +9,8 @@ import {
   DevicePhoneMobileIcon,
   KeyIcon,
   CameraIcon,
+  PencilSquareIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import Sidebar from '../../components/sidebar.jsx';
 
@@ -33,7 +35,65 @@ const calculateAge = (birthdate) => {
 const Profile = () => {
   const { userData, backendUrl, refreshUserData } = useContext(AppContext);
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    birthdate: '',
+    gender: 'Prefer not to say',
+  });
   const fileInputRef = useRef(null);
+
+  const openEditModal = () => {
+    let dateStr = '';
+    if (userData?.birthdate) {
+      try {
+        dateStr = new Date(userData.birthdate).toISOString().split('T')[0];
+      } catch (e) {
+        dateStr = '';
+      }
+    }
+    setEditForm({
+      birthdate: dateStr,
+      gender: userData?.gender || 'Prefer not to say',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!editForm.birthdate) {
+      toast.error('Please select your birthdate');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const { data } = await axios.post(
+        `${backendUrl}/api/user/update-profile`,
+        {
+          birthdate: editForm.birthdate,
+          gender: editForm.gender,
+        },
+        {
+          withCredentials: true,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+
+      if (data.success) {
+        toast.success('Profile updated successfully!');
+        await refreshUserData();
+        setIsEditModalOpen(false);
+      } else {
+        toast.error(data.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Error updating profile');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleAvatarClick = () => {
     if (fileInputRef.current) {
@@ -263,6 +323,18 @@ const Profile = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Edit Profile Button */}
+              <div>
+                <button
+                  type="button"
+                  onClick={openEditModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 hover:text-white rounded-xl text-sm font-medium transition-all shadow-sm cursor-pointer"
+                >
+                  <PencilSquareIcon className="w-4 h-4" />
+                  <span>Edit Profile</span>
+                </button>
+              </div>
             </div>
 
             {/* Info grid: Email / Age / Gender */}
@@ -310,18 +382,93 @@ const Profile = () => {
                 action="Change >"
                 to="/reset-password"
               />
-              {/*
-              <SettingItem
-                icon={DevicePhoneMobileIcon}
-                title="Connected Devices"
-                description="Manage your connected devices"
-                action="Manage >"
-              />
-              */}
             </div>
           </div>
         </motion.div>
       </div>
+
+      {/* Edit Profile Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md bg-gray-900 rounded-2xl border border-gray-800 p-6 shadow-2xl relative"
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-light text-white">Edit Profile Details</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-1.5">
+                  Birthdate (Calculates your Age)
+                </label>
+                <input
+                  type="date"
+                  name="birthdate"
+                  value={editForm.birthdate}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, birthdate: e.target.value }))
+                  }
+                  required
+                  className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-xs sm:text-sm font-medium mb-1.5">
+                  Gender
+                </label>
+                <select
+                  name="gender"
+                  value={editForm.gender}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, gender: e.target.value }))
+                  }
+                  required
+                  className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm font-medium rounded-lg transition-all shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

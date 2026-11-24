@@ -91,3 +91,62 @@ export const updateAvatar = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message });
     }
 };
+
+export const updateProfile = async (req, res) => {
+    try {
+        const { userId, name, birthdate, gender } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: 'User ID is required' });
+        }
+
+        const updates = {};
+        if (name && typeof name === 'string' && name.trim()) {
+            updates.name = name.trim();
+        }
+
+        if (birthdate) {
+            const parsedDate = new Date(birthdate);
+            if (!isNaN(parsedDate.getTime())) {
+                updates.birthdate = parsedDate;
+            } else {
+                return res.status(400).json({ success: false, message: 'Invalid birthdate format' });
+            }
+        }
+
+        if (gender) {
+            const allowedGenders = ['Male', 'Female', 'Prefer not to say'];
+            if (!allowedGenders.includes(gender)) {
+                return res.status(400).json({ success: false, message: 'Invalid gender value' });
+            }
+            updates.gender = gender;
+        }
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            updates,
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            userData: {
+                name: updatedUser.name,
+                email: updatedUser.email,
+                birthdate: updatedUser.birthdate,
+                gender: updatedUser.gender,
+                avatar: updatedUser.avatar || '',
+                isAccountVerified: updatedUser.isAccountVerified,
+                sleepGoalBedtime: updatedUser.sleepGoalBedtime,
+                sleepGoalDuration: updatedUser.sleepGoalDuration
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
