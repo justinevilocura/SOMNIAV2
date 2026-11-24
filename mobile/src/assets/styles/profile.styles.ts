@@ -2,11 +2,14 @@ import { StyleSheet } from 'react-native';
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(35, 35, 75, 0.95)',
-    borderRadius: 18,
-    padding: 24,
-    margin: 14,
-    marginTop: 24,
+    backgroundColor: '#161c2e',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(162, 89, 255, 0.2)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,

@@ -167,30 +167,73 @@ export default function Profile() {
     }
   };
 
-  const handlePickImage = async () => {
+  const handlePickImage = () => {
+    Alert.alert(
+      'Change Profile Photo',
+      'Choose how you want to update your profile photo:',
+      [
+        {
+          text: 'Choose from Library',
+          onPress: () => openPicker('library'),
+        },
+        {
+          text: 'Take Photo',
+          onPress: () => openPicker('camera'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const openPicker = async (type: 'library' | 'camera') => {
     try {
-      // Request permission
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Needed',
-          'Please allow photo library access in phone settings to change your profile picture.'
-        );
-        return;
+      if (type === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Camera Permission Needed',
+            'Please allow camera access in iPhone Settings > SOMNiA to take a photo.'
+          );
+          return;
+        }
+
+        const cameraResult = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
+          quality: 0.4,
+          base64: true,
+        });
+
+        handlePickerResult(cameraResult);
+      } else {
+        // iOS 14+ uses the system PHPickerViewController which runs out-of-process
+        // and does NOT require permissions or cause binary SIGABRT crashes.
+        const libraryResult = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
+          quality: 0.4,
+          base64: true,
+        });
+
+        handlePickerResult(libraryResult);
       }
+    } catch (err) {
+      console.error('Error selecting avatar image:', err);
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not select photo.' });
+      setIsUploading(false);
+    }
+  };
 
-      // Launch picker
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.5,
-        base64: true,
-      });
-
+  const handlePickerResult = async (result: ImagePicker.ImagePickerResult) => {
+    try {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        const base64Image = `data:image/jpeg;base64,${asset.base64}`;
+        const base64Image = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
 
         setIsUploading(true);
         // Optimistic UI update
@@ -208,31 +251,43 @@ export default function Profile() {
         }
 
         const backendUrl = process.env.EXPO_PUBLIC_API_URL || 'https://somniav2-production.up.railway.app';
-        const res = await fetch(`${backendUrl}/api/user/update-avatar`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({ userId, avatar: base64Image })
-        });
+        let uploadSucceeded = false;
+        try {
+          const res = await fetch(`${backendUrl}/api/user/update-avatar`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ userId, avatar: base64Image })
+          });
 
-        const json = await res.json();
-        if (json.success) {
-          Toast.show({ type: 'success', text1: 'Photo Updated!', text2: 'Your new avatar is saved.' });
-          // Update cache
-          if (authDataString) {
-            const parsed = JSON.parse(authDataString);
-            parsed.avatar = base64Image;
-            await AsyncStorage.setItem('authData', JSON.stringify(parsed));
+          const contentType = res.headers.get('content-type');
+          if (res.ok && contentType && contentType.includes('application/json')) {
+            const json = await res.json();
+            if (json.success) {
+              uploadSucceeded = true;
+            }
           }
-        } else {
-          Toast.show({ type: 'error', text1: 'Upload Failed', text2: json.message || 'Could not save photo.' });
+        } catch (netErr) {
+          console.log('Backend avatar sync skipped or offline:', netErr);
         }
+
+        // Always save to phone cache so avatar persists across restarts
+        if (authDataString) {
+          const parsed = JSON.parse(authDataString);
+          parsed.avatar = base64Image;
+          await AsyncStorage.setItem('authData', JSON.stringify(parsed));
+        }
+
+        Toast.show({
+          type: 'success',
+          text1: 'Photo Updated!',
+          text2: uploadSucceeded ? 'Synced to your account.' : 'Saved on this device.',
+        });
       }
     } catch (err) {
-      console.error('Error selecting avatar image:', err);
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Could not select photo.' });
+      console.error('Error handling picker result:', err);
     } finally {
       setIsUploading(false);
     }
@@ -493,38 +548,75 @@ export default function Profile() {
   return (
     <View style={styles.card}>
       {activeTab === 'profile' ? (
-        // ─── DEDICATED PROFILE VIEW ──────────────────────────────────────────
+        // ─── DEDICATED PROFILE VIEW (1:1 with Screenshot 1 & 2) ─────────────
         <View key="profile-details-view">
+          {/* Back Navigation Row: ← Profile Details */}
           <TouchableOpacity
-            onPress={() => setActiveTab('settings')}
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
+            onPress={() => {
+              if (isEditing) {
+                setIsEditing(false);
+              } else {
+                setActiveTab('settings');
+              }
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={22} color="#a259ff" />
-            <Text style={{ color: '#a259ff', fontSize: 15, fontWeight: '600', marginLeft: 6 }}>
-              Back to Settings
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '700', marginLeft: 12 }}>
+              Profile Details
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.profileHeader}>
-            {/* Interactive Avatar with Camera Edit Badge */}
+          {/* Profile Header: Avatar + Name + Email Capsule + Change Photo Pill */}
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            {/* Interactive Avatar with Camera Badge */}
             <TouchableOpacity
               onPress={handlePickImage}
               activeOpacity={0.8}
-              style={styles.avatarContainer}
+              style={{ position: 'relative', marginBottom: 12 }}
             >
-              {userData.avatar ? (
-                <Image
-                  source={{ uri: userData.avatar }}
-                  style={styles.profileImage}
-                />
-              ) : (
-                <Image
-                  source={require('../assets/images/default-avatar.png')}
-                  style={styles.profileImage}
-                />
-              )}
-              <View style={styles.editBadge}>
+              <View style={{
+                width: 104,
+                height: 104,
+                borderRadius: 52,
+                borderWidth: 2,
+                borderColor: '#a855f7',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+              }}>
+                {userData.avatar ? (
+                  <Image
+                    source={{ uri: userData.avatar }}
+                    style={{ width: 96, height: 96, borderRadius: 48 }}
+                  />
+                ) : (
+                  <Image
+                    source={require('../assets/images/default-avatar.png')}
+                    style={{ width: 96, height: 96, borderRadius: 48 }}
+                  />
+                )}
+              </View>
+
+              <View style={{
+                position: 'absolute',
+                bottom: 2,
+                right: 2,
+                backgroundColor: '#8b5cf6',
+                borderRadius: 16,
+                width: 32,
+                height: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: '#161c2e',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 3,
+                elevation: 4,
+              }}>
                 {isUploading ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
@@ -533,99 +625,271 @@ export default function Profile() {
               </View>
             </TouchableOpacity>
 
-            <Text style={styles.profileName}>{userData.name || 'User'}</Text>
-            <Text style={styles.profileEmail}>{userData.email}</Text>
-            <Text style={{ color: '#a29bfe', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>
-              Tap camera to change photo
+            {/* Profile Name */}
+            <Text style={{ fontSize: 22, fontWeight: '700', color: '#ffffff', marginBottom: 8, textAlign: 'center' }}>
+              {userData.name || 'User'}
             </Text>
+
+            {/* Email Capsule */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              paddingHorizontal: 16,
+              paddingVertical: 7,
+              borderRadius: 20,
+              marginBottom: 10,
+            }}>
+              <Ionicons name="mail-outline" size={15} color="#94a3b8" style={{ marginRight: 8 }} />
+              <Text style={{ color: '#cbd5e1', fontSize: 13, fontWeight: '500' }}>
+                {userData.email}
+              </Text>
+            </View>
+
+            {/* Tap photo to change pill */}
+            <TouchableOpacity
+              onPress={handlePickImage}
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                borderWidth: 1,
+                borderColor: 'rgba(168, 85, 247, 0.4)',
+                paddingHorizontal: 16,
+                paddingVertical: 7,
+                borderRadius: 20,
+              }}
+            >
+              <Ionicons name="camera-outline" size={15} color="#c084fc" style={{ marginRight: 6 }} />
+              <Text style={{ color: '#c084fc', fontSize: 13, fontWeight: '600' }}>
+                Tap photo to change
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {/* ─── PERSONAL DETAILS SECTION ─── */}
-          <View style={styles.personalDetailsCard}>
-            <View style={styles.detailsHeader}>
+          {/* ─── PERSONAL DETAILS SECTION (Card) ─── */}
+          <View style={{
+            backgroundColor: '#161c2e',
+            borderRadius: 20,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.06)',
+          }}>
+            {/* Header: Person Icon Box + "Personal Details" + Edit Button */}
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: isEditing ? 8 : 16,
+            }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="person-circle-outline" size={20} color="#a259ff" style={{ marginRight: 6 }} />
-                <Text style={styles.detailsTitle}>Personal Details</Text>
+                <View style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 12,
+                }}>
+                  <Ionicons name="person" size={18} color="#c084fc" />
+                </View>
+                <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '700' }}>
+                  Personal Details
+                </Text>
               </View>
 
               {!isEditing && (
                 <TouchableOpacity
                   onPress={handleStartEdit}
-                  style={{ flexDirection: 'row', alignItems: 'center', padding: 4 }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                    borderWidth: 1,
+                    borderColor: '#8b5cf6',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                  }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="create-outline" size={16} color="#a259ff" style={{ marginRight: 4 }} />
-                  <Text style={styles.editActionText}>Edit</Text>
+                  <Ionicons name="create-outline" size={16} color="#c084fc" style={{ marginRight: 4 }} />
+                  <Text style={{ color: '#c084fc', fontSize: 14, fontWeight: '600' }}>Edit</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             {isEditing ? (
-              // ── EDIT MODE ──
+              // ── EDIT MODE (Screenshot 2) ──
               <View style={{ marginTop: 6 }}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Full Name</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={editForm.name}
-                    onChangeText={(text) => setEditForm(prev => ({ ...prev, name: text }))}
-                    placeholder="Enter full name"
-                    placeholderTextColor="#666"
-                  />
-                </View>
+                {/* FULL NAME */}
+                <Text style={{
+                  color: '#a855f7',
+                  fontSize: 12,
+                  fontWeight: '700',
+                  letterSpacing: 0.6,
+                  marginBottom: 8,
+                  marginTop: 10,
+                  textTransform: 'uppercase',
+                }}>
+                  FULL NAME
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#0d1322',
+                    borderWidth: 1,
+                    borderColor: '#26314d',
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    color: '#ffffff',
+                    fontSize: 15,
+                    marginBottom: 16,
+                  }}
+                  value={editForm.name}
+                  onChangeText={(text) => setEditForm(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter full name"
+                  placeholderTextColor="#64748b"
+                />
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Age</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={editForm.age}
-                    onChangeText={(text) => setEditForm(prev => ({ ...prev, age: text.replace(/[^0-9]/g, '') }))}
-                    placeholder="e.g. 25"
-                    placeholderTextColor="#666"
-                    keyboardType="number-pad"
-                    maxLength={3}
-                  />
-                </View>
+                {/* AGE */}
+                <Text style={{
+                  color: '#a855f7',
+                  fontSize: 12,
+                  fontWeight: '700',
+                  letterSpacing: 0.6,
+                  marginBottom: 8,
+                  textTransform: 'uppercase',
+                }}>
+                  AGE
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#0d1322',
+                    borderWidth: 1,
+                    borderColor: '#26314d',
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    color: '#ffffff',
+                    fontSize: 15,
+                    marginBottom: 16,
+                  }}
+                  value={editForm.age}
+                  onChangeText={(text) => setEditForm(prev => ({ ...prev, age: text.replace(/[^0-9]/g, '') }))}
+                  placeholder="e.g. 25"
+                  placeholderTextColor="#64748b"
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Gender</Text>
-                  <View style={styles.genderContainer}>
-                    {['Male', 'Female', 'Prefer not to say', 'Other'].map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        style={[
-                          styles.genderPill,
-                          editForm.gender === option && styles.genderPillActive,
-                        ]}
-                        onPress={() => setEditForm(prev => ({ ...prev, gender: option }))}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.genderText,
-                            editForm.gender === option && styles.genderTextActive,
-                          ]}
+                {/* GENDER */}
+                <Text style={{
+                  color: '#a855f7',
+                  fontSize: 12,
+                  fontWeight: '700',
+                  letterSpacing: 0.6,
+                  marginBottom: 10,
+                  textTransform: 'uppercase',
+                }}>
+                  GENDER
+                </Text>
+                {/* Gender Pills: Row 1 (Male, Female, Prefer not to say), Row 2 (Other) */}
+                <View style={{ marginBottom: 24 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {['Male', 'Female', 'Prefer not to say'].map((option) => {
+                      const isSelected = editForm.gender === option;
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 18,
+                            borderRadius: 24,
+                            borderWidth: 1,
+                            borderColor: isSelected ? '#8b5cf6' : '#26314d',
+                            backgroundColor: isSelected ? '#6d28d9' : '#0d1322',
+                          }}
+                          onPress={() => setEditForm(prev => ({ ...prev, gender: option }))}
+                          activeOpacity={0.7}
                         >
-                          {option}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                          <Text
+                            style={{
+                              color: isSelected ? '#ffffff' : '#94a3b8',
+                              fontSize: 14,
+                              fontWeight: isSelected ? '700' : '500',
+                            }}
+                          >
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={{ flexDirection: 'row', marginTop: 10 }}>
+                    {['Other'].map((option) => {
+                      const isSelected = editForm.gender === option;
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 18,
+                            borderRadius: 24,
+                            borderWidth: 1,
+                            borderColor: isSelected ? '#8b5cf6' : '#26314d',
+                            backgroundColor: isSelected ? '#6d28d9' : '#0d1322',
+                          }}
+                          onPress={() => setEditForm(prev => ({ ...prev, gender: option }))}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={{
+                              color: isSelected ? '#ffffff' : '#94a3b8',
+                              fontSize: 14,
+                              fontWeight: isSelected ? '700' : '500',
+                            }}
+                          >
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
 
-                {/* Save / Cancel buttons */}
-                <View style={styles.actionButtonsRow}>
+                {/* Save / Cancel action buttons */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
                   <TouchableOpacity
-                    style={styles.cancelBtn}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: '#334155',
+                      backgroundColor: '#1b2236',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                     onPress={() => setIsEditing(false)}
                     disabled={isSaving}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                    <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.saveBtn}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      borderRadius: 14,
+                      backgroundColor: '#8b5cf6',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                     onPress={handleSaveProfile}
                     disabled={isSaving}
                     activeOpacity={0.7}
@@ -633,40 +897,92 @@ export default function Profile() {
                     {isSaving ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={styles.saveBtnText}>Save</Text>
+                      <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '700' }}>Save</Text>
                     )}
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
-              // ── DISPLAY MODE ──
+              // ── DISPLAY MODE (Screenshot 1) ──
               <View style={{ marginTop: 4 }}>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelContainer}>
-                    <Ionicons name="person-outline" size={17} color="#a259ff" />
-                    <Text style={styles.detailLabel}>Full Name</Text>
+                {/* Row 1: Full Name */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Ionicons name="person-outline" size={17} color="#c084fc" />
+                    </View>
+                    <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: '500' }}>Full Name</Text>
                   </View>
-                  <Text style={styles.detailValue} numberOfLines={1}>
-                    {userData.name || 'Not set'}
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
+                    {userData.name || 'User'}
                   </Text>
                 </View>
 
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelContainer}>
-                    <Ionicons name="calendar-outline" size={17} color="#a259ff" />
-                    <Text style={styles.detailLabel}>Age</Text>
+                {/* Row 2: Age */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Ionicons name="calendar-outline" size={17} color="#38bdf8" />
+                    </View>
+                    <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: '500' }}>Age</Text>
                   </View>
-                  <Text style={styles.detailValue}>
+                  <Text style={{ color: userData.age ? '#ffffff' : '#94a3b8', fontSize: 15, fontWeight: userData.age ? '600' : '500' }}>
                     {userData.age ? `${userData.age} years old` : 'Not set'}
                   </Text>
                 </View>
 
-                <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-                  <View style={styles.detailLabelContainer}>
-                    <Ionicons name="transgender-outline" size={17} color="#a259ff" />
-                    <Text style={styles.detailLabel}>Gender</Text>
+                {/* Row 3: Gender */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 14,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(244, 114, 182, 0.15)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 12,
+                    }}>
+                      <Ionicons name="transgender-outline" size={17} color="#f472b6" />
+                    </View>
+                    <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: '500' }}>Gender</Text>
                   </View>
-                  <Text style={styles.detailValue}>
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>
                     {userData.gender || 'Not set'}
                   </Text>
                 </View>
@@ -675,127 +991,239 @@ export default function Profile() {
           </View>
         </View>
       ) : activeTab === 'account_privacy' ? (
-        // ─── DEDICATED ACCOUNT AND PRIVACY VIEW ──────────────────────────────
+        // ─── DEDICATED ACCOUNT AND PRIVACY VIEW (1:1 with Screenshot) ─────────
         <View key="account-privacy-view">
+          {/* Back Navigation Row: ← Account and Privacy */}
           <TouchableOpacity
             onPress={() => setActiveTab('settings')}
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={22} color="#a259ff" />
-            <Text style={{ color: '#a259ff', fontSize: 15, fontWeight: '600', marginLeft: 6 }}>
-              Back to Settings
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            <Text style={{ color: '#ffffff', fontSize: 20, fontWeight: '700', marginLeft: 12 }}>
+              Account and Privacy
             </Text>
           </TouchableOpacity>
 
-          <Text style={[styles.sectionTitle, { fontSize: 20, marginTop: 4, marginBottom: 16, textAlign: 'left' }]}>
-            Account and Privacy
-          </Text>
-
-          {/* Change Password Card */}
-          <View style={styles.personalDetailsCard}>
-            <View style={styles.detailsHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="key-outline" size={20} color="#a259ff" style={{ marginRight: 6 }} />
-                <Text style={styles.detailsTitle}>Change Password</Text>
+          {/* ─── 1. Change Password Card ─── */}
+          <View style={{
+            backgroundColor: '#161c2e',
+            borderRadius: 20,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.06)',
+            marginBottom: 16,
+          }}>
+            {/* Header: Key icon box + Title */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="key" size={18} color="#c084fc" />
               </View>
+              <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '700' }}>
+                Change Password
+              </Text>
             </View>
 
-            <View style={{ marginTop: 6 }}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Current Password</Text>
-                <View style={styles.passwordInputContainer}>
-                  <TextInput
-                    key={showCurrentPass ? 'curr-txt' : 'curr-sec'}
-                    style={styles.passwordInput}
-                    value={passwordForm.currentPassword}
-                    onChangeText={(t) => setPasswordForm(prev => ({ ...prev, currentPassword: t }))}
-                    placeholder="Enter current password"
-                    placeholderTextColor="#666"
-                    secureTextEntry={!showCurrentPass}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity onPress={() => setShowCurrentPass(!showCurrentPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showCurrentPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>New Password</Text>
-                <View style={styles.passwordInputContainer}>
-                  <TextInput
-                    key={showNewPass ? 'new-txt' : 'new-sec'}
-                    style={styles.passwordInput}
-                    value={passwordForm.newPassword}
-                    onChangeText={(t) => setPasswordForm(prev => ({ ...prev, newPassword: t }))}
-                    placeholder="At least 6 characters"
-                    placeholderTextColor="#666"
-                    secureTextEntry={!showNewPass}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity onPress={() => setShowNewPass(!showNewPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showNewPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Confirm New Password</Text>
-                <View style={styles.passwordInputContainer}>
-                  <TextInput
-                    key={showConfirmPass ? 'conf-txt' : 'conf-sec'}
-                    style={styles.passwordInput}
-                    value={passwordForm.confirmPassword}
-                    onChangeText={(t) => setPasswordForm(prev => ({ ...prev, confirmPassword: t }))}
-                    placeholder="Re-type new password"
-                    placeholderTextColor="#666"
-                    secureTextEntry={!showConfirmPass}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity onPress={() => setShowConfirmPass(!showConfirmPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name={showConfirmPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#888" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.saveBtn, { marginTop: 8 }]}
-                onPress={handleChangePassword}
-                disabled={isChangingPass}
-                activeOpacity={0.7}
-              >
-                {isChangingPass ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Update Password</Text>
-                )}
+            {/* Field 1: CURRENT PASSWORD */}
+            <Text style={{
+              color: '#a855f7',
+              fontSize: 12,
+              fontWeight: '700',
+              letterSpacing: 0.6,
+              marginBottom: 8,
+              marginTop: 18,
+              textTransform: 'uppercase',
+            }}>
+              CURRENT PASSWORD
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#0d1322',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#26314d',
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              marginBottom: 14,
+            }}>
+              <TextInput
+                key={showCurrentPass ? 'curr-txt' : 'curr-sec'}
+                style={{ flex: 1, color: '#ffffff', fontSize: 15 }}
+                value={passwordForm.currentPassword}
+                onChangeText={(t) => setPasswordForm(prev => ({ ...prev, currentPassword: t }))}
+                placeholder="Enter current password"
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showCurrentPass}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity onPress={() => setShowCurrentPass(!showCurrentPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name={showCurrentPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#64748b" />
               </TouchableOpacity>
             </View>
+
+            {/* Field 2: NEW PASSWORD */}
+            <Text style={{
+              color: '#a855f7',
+              fontSize: 12,
+              fontWeight: '700',
+              letterSpacing: 0.6,
+              marginBottom: 8,
+              textTransform: 'uppercase',
+            }}>
+              NEW PASSWORD
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#0d1322',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#26314d',
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              marginBottom: 14,
+            }}>
+              <TextInput
+                key={showNewPass ? 'new-txt' : 'new-sec'}
+                style={{ flex: 1, color: '#ffffff', fontSize: 15 }}
+                value={passwordForm.newPassword}
+                onChangeText={(t) => setPasswordForm(prev => ({ ...prev, newPassword: t }))}
+                placeholder="At least 6 characters"
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showNewPass}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity onPress={() => setShowNewPass(!showNewPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name={showNewPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Field 3: CONFIRM NEW PASSWORD */}
+            <Text style={{
+              color: '#a855f7',
+              fontSize: 12,
+              fontWeight: '700',
+              letterSpacing: 0.6,
+              marginBottom: 8,
+              textTransform: 'uppercase',
+            }}>
+              CONFIRM NEW PASSWORD
+            </Text>
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#0d1322',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: '#26314d',
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              marginBottom: 20,
+            }}>
+              <TextInput
+                key={showConfirmPass ? 'conf-txt' : 'conf-sec'}
+                style={{ flex: 1, color: '#ffffff', fontSize: 15 }}
+                value={passwordForm.confirmPassword}
+                onChangeText={(t) => setPasswordForm(prev => ({ ...prev, confirmPassword: t }))}
+                placeholder="Re-type new password"
+                placeholderTextColor="#64748b"
+                secureTextEntry={!showConfirmPass}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity onPress={() => setShowConfirmPass(!showConfirmPass)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name={showConfirmPass ? 'eye-off-outline' : 'eye-outline'} size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Update Password Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#8b5cf6',
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onPress={handleChangePassword}
+              disabled={isChangingPass}
+              activeOpacity={0.8}
+            >
+              {isChangingPass ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '700' }}>Update Password</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
-          {/* Delete Account (Danger Zone) */}
-          <View style={styles.dangerCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Ionicons name="warning-outline" size={20} color="#ff5252" style={{ marginRight: 6 }} />
-              <Text style={styles.dangerTitle}>Delete Account</Text>
+          {/* ─── 2. Delete Account Card (Danger Zone) ─── */}
+          <View style={{
+            backgroundColor: '#161c2e',
+            borderRadius: 20,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: 'rgba(239, 68, 68, 0.25)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            {/* Left: Trash Icon Box + Texts */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 }}>
+              <View style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                borderWidth: 1,
+                borderColor: 'rgba(239, 68, 68, 0.3)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+              }}>
+                <Ionicons name="trash-outline" size={20} color="#ef4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '700', marginBottom: 3 }}>
+                  Delete Account
+                </Text>
+                <Text style={{ color: '#94a3b8', fontSize: 12, lineHeight: 16 }}>
+                  Permanently erase your account and all sleep history
+                </Text>
+              </View>
             </View>
-            <Text style={styles.dangerDesc}>
-              Permanently delete your SOMNIA account and erase all sleep sessions, health data, and history. This cannot be undone.
-            </Text>
+
+            {/* Right: Delete Button Pill */}
             <TouchableOpacity
-              style={styles.deleteBtn}
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                borderWidth: 1,
+                borderColor: 'rgba(239, 68, 68, 0.4)',
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
               onPress={handleDeleteAccount}
               disabled={isDeletingAccount}
               activeOpacity={0.8}
             >
               {isDeletingAccount ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color="#ef4444" />
               ) : (
-                <Text style={styles.deleteBtnText}>Delete My Account</Text>
+                <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '700' }}>Delete</Text>
               )}
             </TouchableOpacity>
           </View>

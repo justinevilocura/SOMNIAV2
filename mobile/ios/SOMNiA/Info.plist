@@ -55,6 +55,10 @@
 	<string>Allow SOMNiA to read your health data to track sleep, steps, and heart rate.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Allow SOMNiA to write health data.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow SOMNiA to access your photo library to select a profile picture.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow SOMNiA to access your camera to take a profile picture.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

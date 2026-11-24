@@ -124,9 +124,17 @@ const Profile = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               {/* Avatar + name */}
               <div className="flex items-start gap-4 sm:gap-6">
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <UserCircleIcon className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400" />
-                </div>
+                {userData.avatar ? (
+                  <img
+                    src={userData.avatar}
+                    alt={userData.name}
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-blue-500/40 shadow-lg"
+                  />
+                ) : (
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <UserCircleIcon className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400" />
+                  </div>
+                )}
 
                 <div>
                   <div className="flex flex-wrap items-center gap-3">

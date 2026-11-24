@@ -94,9 +94,17 @@ const NavigationBar = () => {
     return (
       <Menu as="div" className="relative">
         <Menu.Button className="flex items-center space-x-2 sm:space-x-3 text-white hover:text-gray-200 transition-colors">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-center text-sm">
-            {userData.name?.charAt(0)}
-          </div>
+          {userData.avatar ? (
+            <img
+              src={userData.avatar}
+              alt={userData.name}
+              className="w-8 h-8 rounded-full object-cover border border-blue-400/50"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-center text-sm">
+              {userData.name?.charAt(0)}
+            </div>
+          )}
           <span className="hidden sm:inline text-sm">{userData.name}</span>
         </Menu.Button>
 

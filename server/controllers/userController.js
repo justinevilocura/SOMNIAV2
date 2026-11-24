@@ -17,6 +17,7 @@ export const getUserData = async (req,res)=>{
                 birthdate: user.birthdate,  
                 isAccountVerified : user.isAccountVerified,
                 gender: user.gender,
+                avatar: user.avatar || '',
             }
         });
 
@@ -24,6 +25,35 @@ export const getUserData = async (req,res)=>{
         res.json({success: false, message: error.message});
     }
 }
+
+export const updateAvatar = async (req, res) => {
+    try {
+        const userId = req.body.userId;
+        const { avatar } = req.body;
+
+        if (!userId || !avatar) {
+            return res.json({ success: false, message: 'User ID and avatar are required' });
+        }
+
+        const updatedUser = await userModel.findByIdAndUpdate(
+            userId,
+            { avatar },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            message: 'Avatar updated successfully',
+            avatar: updatedUser.avatar,
+        });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
 
 export const updateUserGoals = async (req, res) => {
     try {

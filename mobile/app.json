@@ -21,6 +21,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.somnia.unabia",
       "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow SOMNiA to access your photo library to select a profile picture.",
+        "NSCameraUsageDescription": "Allow SOMNiA to access your camera to take a profile picture.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
